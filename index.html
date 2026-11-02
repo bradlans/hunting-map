@@ -204,6 +204,13 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 24px);
 }
 .placebar p { margin: 0; width: 100%; text-align: center; font-size: 13px; color: var(--muted); }
+.placebar p.warn { color: var(--blaze); }
+.placebar p:empty { display: none; }
+.coordrow { display: flex; gap: 6px; width: 100%; }
+.coordrow input {
+  flex: 1; min-width: 0; font: 15px var(--f-body); color: var(--fg); background: var(--bg);
+  border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-variant-numeric: tabular-nums;
+}
 
 /* Pin editor */
 .editor-wrap { position: absolute; inset: 0; z-index: 8; background: rgba(10, 16, 10, .35); display: grid; place-items: end center; }
@@ -286,7 +293,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   <div class="scroll" id="tab-types" role="tabpanel" aria-labelledby="tabbtn-types" hidden>
     <section class="sec">
       <h3>Pin types</h3>
-      <p class="small" style="margin:0 0 6px">These are the choices when you drop a pin. Edit the name, color or 1â€“2 letter badge. A type in use can't be deleted until its pins are changed.</p>
+      <p class="small" style="margin:0 0 6px">These are the choices when you drop a pin. Edit the name, color or 1–2 letter badge. A type in use can't be deleted until its pins are changed.</p>
       <div id="typeList"></div>
       <form class="inline" id="formType">
         <input type="color" id="newTypeColor" value="#e2571c" aria-label="New type color">
@@ -313,8 +320,8 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
       <label class="row"><input type="checkbox" id="chkWind" checked><span class="lbl">Observed wind <span class="note">Arrows point downwind, where scent drifts</span></span></label>
       <div class="legend-wind" aria-hidden="true">
         <span><i style="background:#7fd67f"></i>&lt; 8 mph</span>
-        <span><i style="background:#ffd73c"></i>8â€“14</span>
-        <span><i style="background:#ff8c2a"></i>15â€“24</span>
+        <span><i style="background:#ffd73c"></i>8–14</span>
+        <span><i style="background:#ff8c2a"></i>15–24</span>
         <span><i style="background:#e63030"></i>25+</span>
       </div>
       <p class="small" id="nearWind"></p>
@@ -339,6 +346,11 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 <div class="crosshair" id="crosshair" hidden></div>
 <div class="placebar" id="placebar" hidden>
   <p id="placeHint">Move the map so the crosshair is on the spot, or tap the map.</p>
+  <form class="coordrow" id="coordForm" autocomplete="off">
+    <input type="text" id="coordInput" inputmode="text" placeholder="Paste GPS, e.g. 44.240000, -85.450000" aria-label="Go to coordinates" spellcheck="false" autocapitalize="off">
+    <button class="btn" type="submit">Go</button>
+  </form>
+  <p class="small warn" id="coordError" aria-live="polite"></p>
   <button class="btn primary" id="btnPlaceHere">Drop pin here</button>
   <button class="btn" id="btnPlaceGps">At my location</button>
   <button class="btn ghost" id="btnPlaceCancel">Cancel</button>

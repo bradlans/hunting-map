@@ -17,10 +17,16 @@ Using it
   HAP land     - Hunting Access Program parcels (magenta stripes), live from the
                  Michigan DNR; tap one for hunt type, check-in rules, hunter limit
                  and directions to the check-in. A saved copy works with no signal.
+  Parcels      - private property lines (zoom in close) for the 24 counties that share
+                 them free: Allegan, Barry, Cheboygan, Grand Traverse, Ionia, Jackson,
+                 Kalamazoo, Kent, Lake, Lenawee, Macomb, Mason, Midland, Monroe,
+                 Montcalm, Muskegon, Newaygo, Oakland, Oceana, Osceola, Ottawa,
+                 Roscommon, Saginaw, St. Clair. Tap for owner / parcel # / acres.
   Tap the map  - who owns that spot and whether it's open to the public
   Tap an arrow - station, wind direction and speed, gusts, how old the reading is
   Wind button  - refresh wind now
-  GPS button   - (top right) shows where you are and whether you're on public land
+  GPS button   - (top right) shows where you are and whether you're on public land;
+                 the blue cone shows which way the phone is pointing (compass)
 
 Pins
   Double-click (computer) or press and hold (phone) the map to drop a pin right there.
@@ -54,4 +60,6 @@ Files
   index.html, app.js      the map
   pins.js                 pins, folders, pin types, GitHub sync
   hap.js                  Hunting Access Program layer (Michigan DNR open data)
+  parcels.js              county parcel lines (each county's free public GIS service)
+  compass.js              view cone on the location dot
   data/public_land.js     public land (USGS PAD-US 4.1, Michigan, simplified)

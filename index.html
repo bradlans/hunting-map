@@ -40,7 +40,7 @@
 [hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); overflow: hidden; }
-#map { position: absolute; inset: 0; }
+#map { position: absolute; inset: 0; -webkit-touch-callout: none; -webkit-user-select: none; user-select: none; }
 
 .topbar {
   position: absolute; z-index: 5; top: calc(10px + env(safe-area-inset-top, 0px));
@@ -286,7 +286,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   <div class="scroll" id="tab-types" role="tabpanel" aria-labelledby="tabbtn-types" hidden>
     <section class="sec">
       <h3>Pin types</h3>
-      <p class="small" style="margin:0 0 6px">These are the choices when you drop a pin. Edit the name, color or 1–2 letter badge. A type in use can't be deleted until its pins are changed.</p>
+      <p class="small" style="margin:0 0 6px">These are the choices when you drop a pin. Edit the name, color or 1â€“2 letter badge. A type in use can't be deleted until its pins are changed.</p>
       <div id="typeList"></div>
       <form class="inline" id="formType">
         <input type="color" id="newTypeColor" value="#e2571c" aria-label="New type color">
@@ -313,11 +313,18 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
       <label class="row"><input type="checkbox" id="chkWind" checked><span class="lbl">Observed wind <span class="note">Arrows point downwind, where scent drifts</span></span></label>
       <div class="legend-wind" aria-hidden="true">
         <span><i style="background:#7fd67f"></i>&lt; 8 mph</span>
-        <span><i style="background:#ffd73c"></i>8–14</span>
-        <span><i style="background:#ff8c2a"></i>15–24</span>
+        <span><i style="background:#ffd73c"></i>8â€“14</span>
+        <span><i style="background:#ff8c2a"></i>15â€“24</span>
         <span><i style="background:#e63030"></i>25+</span>
       </div>
       <p class="small" id="nearWind"></p>
+    </section>
+
+    <section class="sec">
+      <h3>Hunting Access Program</h3>
+      <label class="row"><input type="checkbox" id="chkHap" checked><span class="sw" style="background:repeating-linear-gradient(135deg,#d61c8c 0 3px,transparent 3px 7px);border-color:#d61c8c"></span><span class="lbl">HAP land <span class="note">Private land the DNR leases for public hunting. Tap a parcel for rules and check-in.</span></span></label>
+      <label class="row"><input type="checkbox" id="chkHapInactive"><span class="sw" style="background:transparent;border:2px dashed #9a9a9a"></span><span class="lbl">Show inactive parcels <span class="note warn">Former HAP land, not open to hunting</span></span></label>
+      <p class="small" id="hapStatus">Loading HAP land...</p>
     </section>
 
     <section class="sec">
@@ -357,5 +364,6 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="app.js"></script>
 <script src="pins.js"></script>
+<script src="hap.js"></script>
 </body>
 </html>

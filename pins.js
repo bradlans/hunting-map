@@ -166,12 +166,8 @@
 
   // ---- Coordinates: copy and paste -----------------------------------------------
   const fmt = (lat, lng) => lat.toFixed(6) + ', ' + lng.toFixed(6);
-  function copyCoords(lat, lng, btn) {
-    const text = fmt(lat, lng);
-    const done = () => {
-      toast('Copied ' + text);
-      if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy GPS'; }, 1500); }
-    };
+  // Resolves true once the text is on the clipboard.
+  function copyText(text) {
     const fallback = () => {
       const ta = document.createElement('textarea');
       ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'absolute'; ta.style.left = '-9999px';
@@ -179,10 +175,18 @@
       let ok = false;
       try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
       ta.remove();
-      if (ok) done(); else toast('Could not copy. Coordinates: ' + text);
+      return ok;
     };
-    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback);
-    else fallback();
+    if (navigator.clipboard && window.isSecureContext) return navigator.clipboard.writeText(text).then(() => true, fallback);
+    return Promise.resolve(fallback());
+  }
+  function copyCoords(lat, lng, btn) {
+    const text = fmt(lat, lng);
+    copyText(text).then(ok => {
+      if (!ok) { toast('Could not copy. Coordinates: ' + text); return; }
+      toast('Copied ' + text);
+      if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy GPS'; }, 1500); }
+    });
   }
   // Reads "44.24, -85.45", "44.24 -85.45", "44°14'24\"N 85°27'0\"W", "N44 14.4 W85 27.0",
   // and Google Maps links ("@44.24,-85.45"). Returns {lat, lng, note} or null.
@@ -423,7 +427,8 @@
   $('editorWrap').addEventListener('click', e => { if (e.target === $('editorWrap')) closeEditor(); });
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
-    if (!$('editorWrap').hidden) closeEditor();
+    if (!$('shareWrap').hidden) closeShare();
+    else if (!$('editorWrap').hidden) closeEditor();
     else if (placing) { stopPlacing(); movingId = null; }
   });
   $('btnPinDelete').addEventListener('click', () => {
@@ -451,10 +456,13 @@
         '<input type="checkbox" data-fvis="' + esc(f.id) + '"' + (f.visible !== false ? ' checked' : '') + ' aria-label="Show ' + esc(f.name) + ' on the map">' +
         '<span class="name" data-fopen="' + esc(f.id) + '" role="button" tabindex="0" aria-expanded="' + open + '">' + (open ? '▾ ' : '▸ ') + esc(f.name) + '</span>' +
         '<span class="num">' + pins.length + '</span>' +
-        (f.id === UNFILED ? '' :
-          '<button class="btn ghost" data-fren="' + esc(f.id) + '">Rename</button>' +
-          '<button class="btn ghost" data-fdel="' + esc(f.id) + '">Delete</button>') +
         '</div>' +
+        (open && f.id !== UNFILED ?
+          '<div class="folder-actions">' +
+          '<button class="btn ghost" data-fshare="' + esc(f.id) + '">Share</button>' +
+          '<button class="btn ghost" data-fren="' + esc(f.id) + '">Rename</button>' +
+          '<button class="btn ghost" data-fdel="' + esc(f.id) + '">Delete</button>' +
+          '</div>' : '') +
         (open ? (pins.length
           ? '<ul class="pin-list">' + pins.map(p => {
               const t = typeById(p.type);
@@ -472,9 +480,11 @@
     save(); renderMap();
   });
   $('folderList').addEventListener('click', e => {
-    const el = e.target.closest('[data-fopen],[data-fren],[data-fdel],[data-pin]');
+    const el = e.target.closest('[data-fopen],[data-fshare],[data-fren],[data-fdel],[data-pin]');
     if (!el) return;
-    if (el.dataset.fopen) {
+    if (el.dataset.fshare) {
+      openShareOut(folderById(el.dataset.fshare));
+    } else if (el.dataset.fopen) {
       const id = el.dataset.fopen;
       collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id);
       renderFolders();
@@ -556,6 +566,175 @@
     changed(); toast('Pin type added');
   });
 
+  // ---- Sharing a folder -------------------------------------------------------
+  // A share is one folder's pins (plus the pin types they use) packed into the link's
+  // #share= part, which never leaves the browser. The folder and pins keep their ids, so
+  // opening a newer share of the same folder updates the copy instead of duplicating it.
+  const SHARE_APP = 'mhm-share';
+  function toB64url(bytes) {
+    let bin = '';
+    for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+    return btoa(bin).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  }
+  function fromB64url(s) {
+    const bin = atob(s.replace(/-/g, '+').replace(/_/g, '/'));
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return bytes;
+  }
+  const squeeze = (bytes, Stream) => new Response(new Blob([bytes]).stream().pipeThrough(new Stream('deflate-raw'))).arrayBuffer().then(b => new Uint8Array(b));
+  // "z" = compressed, "j" = plain JSON for browsers without CompressionStream.
+  async function packShare(obj) {
+    const bytes = new TextEncoder().encode(JSON.stringify(obj));
+    if (window.CompressionStream) return 'z' + toB64url(await squeeze(bytes, CompressionStream));
+    return 'j' + toB64url(bytes);
+  }
+  async function unpackShare(s) {
+    let bytes = fromB64url(s.slice(1));
+    if (s[0] === 'z') {
+      if (!window.DecompressionStream) throw new Error('This browser is too old to open shared pins.');
+      bytes = await squeeze(bytes, DecompressionStream);
+    } else if (s[0] !== 'j') throw new Error('bad share');
+    return JSON.parse(new TextDecoder().decode(bytes));
+  }
+  function sharePayload(f) {
+    const pins = data.pins.filter(p => p.folder === f.id);
+    const used = new Set(pins.map(p => p.type));
+    return {
+      app: SHARE_APP, v: 1, at: now(),
+      folder: { id: f.id, name: f.name, updatedAt: f.updatedAt || 0 },
+      types: data.types.filter(t => used.has(t.id)).map(t => ({ id: t.id, name: t.name, color: t.color, badge: t.badge || '', updatedAt: t.updatedAt || 0 })),
+      pins: pins.map(p => ({ id: p.id, lng: p.lng, lat: p.lat, type: p.type, name: p.name || '', note: p.note || '', created: p.created, updatedAt: p.updatedAt || 0 })),
+    };
+  }
+  // Cleans up a share from a link or file; returns null if it isn't one.
+  function readShare(s) {
+    if (!s || s.app !== SHARE_APP || !s.folder || !Array.isArray(s.pins)) return null;
+    const str = (v, n) => String(v == null ? '' : v).slice(0, n);
+    const folder = { id: str(s.folder.id, 40), name: str(s.folder.name, 40) || 'Shared pins', updatedAt: +s.folder.updatedAt || 0 };
+    if (!folder.id || folder.id === UNFILED) return null;
+    const types = (Array.isArray(s.types) ? s.types : []).filter(validType).map(t => ({ id: str(t.id, 40), name: str(t.name, 30), color: t.color, badge: str(t.badge, 2), updatedAt: +t.updatedAt || 0 }));
+    const pins = s.pins.slice(0, 5000).filter(validPin).map(p => ({
+      id: str(p.id, 40), lng: +p.lng, lat: +p.lat, type: str(p.type, 40), folder: folder.id, name: str(p.name, 60), note: str(p.note, 1000),
+      created: p.created ? str(p.created, 30) : undefined, updatedAt: +p.updatedAt || 0,
+    })).filter(p => Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180);
+    return { folder, types, pins, at: +s.at || 0 };
+  }
+  function addShare(sh) {
+    const tombs = data.deleted;
+    // Adding a share on purpose brings back a folder or type this device deleted earlier.
+    const revive = (kind, x) => (tombs[kind + ':' + x.id] >= x.updatedAt ? Object.assign({}, x, { updatedAt: now() }) : x);
+    const types = sh.types.filter(t => !data.types.some(x => x.id === t.id)).map(t => revive('t', t));
+    mergeInto(data, { types, folders: [revive('f', sh.folder)], pins: sh.pins, deleted: {} });
+    // Pins left in Unfiled when this folder was deleted here go back into it.
+    sh.pins.forEach(p => { const cur = pinById(p.id); if (cur && cur.folder === UNFILED) { cur.folder = sh.folder.id; stamp(cur); } });
+    data.types.forEach(t => { if (!map.hasImage('pin-' + t.id)) refreshIcon(t); });
+    folderById(sh.folder.id).visible = true;
+    collapsed.delete(sh.folder.id);
+    changed();
+    if (sh.pins.length) {
+      const b = new maplibregl.LngLatBounds();
+      sh.pins.forEach(p => b.extend([p.lng, p.lat]));
+      map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 0 });
+    }
+  }
+
+  function openShareModal(title, text, warn, buttons) {
+    $('shareTitle').textContent = title;
+    $('shareText').textContent = text;
+    $('shareWarn').textContent = warn || '';
+    const row = $('shareBtns');
+    row.innerHTML = '';
+    buttons.forEach(b => {
+      const el = document.createElement('button');
+      el.type = 'button'; el.className = 'btn' + (b.primary ? ' primary' : ''); el.textContent = b.label;
+      el.addEventListener('click', () => b.run(el));
+      row.appendChild(el);
+    });
+    $('shareWrap').hidden = false;
+    row.querySelector('.primary') ? row.querySelector('.primary').focus() : row.firstChild.focus();
+  }
+  function closeShare() { $('shareWrap').hidden = true; }
+  $('shareWrap').addEventListener('click', e => { if (e.target === $('shareWrap')) closeShare(); });
+
+  async function openShareOut(f) {
+    const payloadOut = sharePayload(f);
+    const n = payloadOut.pins.length;
+    if (!n) { toast('"' + f.name + '" has no pins to share yet.'); return; }
+    let url;
+    try { url = location.origin + location.pathname + '#share=' + await packShare(payloadOut); }
+    catch (e) { console.error(e); toast('Could not make a share link in this browser. Use "Save as file" instead.'); }
+    const label = n + ' pin' + (n === 1 ? '' : 's');
+    const buttons = [];
+    if (url && navigator.share) buttons.push({ label: 'Send link', primary: true, run: () => {
+      navigator.share({ title: f.name + ' (hunting pins)', text: 'Hunting pins: ' + f.name + ' (' + label + '). Open the link to add them to your map.', url })
+        .then(closeShare, err => { if (err && err.name !== 'AbortError') toast('Could not open sharing. Use Copy link.'); });
+    } });
+    if (url) buttons.push({ label: 'Copy link', primary: !navigator.share, run: el => copyText(url).then(ok => {
+      if (!ok) { toast('Could not copy the link.'); return; }
+      el.textContent = 'Copied'; toast('Link copied. Paste it in a text or email.');
+    }) });
+    buttons.push({ label: 'Save as file', run: () => {
+      const blob = new Blob([JSON.stringify(payloadOut)], { type: 'application/json' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'pins-' + f.name.replace(/[^\w-]+/g, '-').replace(/^-|-$/g, '').toLowerCase() + '.json';
+      document.body.appendChild(a); a.click(); a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+      toast('Saved. They open it with Import pins on the Pins tab.');
+    } });
+    buttons.push({ label: 'Close', run: closeShare });
+    openShareModal('Share "' + f.name + '"',
+      'Sends a link with this folder\'s ' + label + ': locations, types, names and notes. Whoever opens it can add the folder to their own map. Share again later and their copy updates instead of doubling up.',
+      'Anyone who has the link can see these pins, so only send it to people you trust.' + (url && url.length > 30000 ? ' This folder makes a very long link; if it gets cut off, use Save as file.' : ''),
+      buttons);
+  }
+
+  function offerShare(sh) {
+    const f = folderById(sh.folder.id), have = f && f.id === sh.folder.id;
+    let added = 0, updated = 0;
+    sh.pins.forEach(p => {
+      const cur = pinById(p.id);
+      if (!cur) { if (!(data.deleted['p:' + p.id] >= p.updatedAt)) added++; }
+      else if (p.updatedAt > (cur.updatedAt || 0)) updated++;
+    });
+    const n = sh.pins.length, label = n + ' pin' + (n === 1 ? '' : 's');
+    const when = sh.at ? ' Shared ' + new Date(sh.at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + '.' : '';
+    let text;
+    if (!have) text = 'Someone shared a folder of ' + label + ' with you.' + when + ' Add it to your map as the folder "' + sh.folder.name + '"?';
+    else if (added || updated) text = 'This is a newer copy of your "' + f.name + '" folder.' + when + ' Adding it brings in ' +
+      [added ? added + ' new' : '', updated ? updated + ' updated' : ''].filter(Boolean).join(' and ') + ' pin' + (added + updated === 1 ? '' : 's') + '. Pins you changed since keep your changes.';
+    else text = 'You already have everything in this "' + f.name + '" share.' + when;
+    if (narrow()) setPanel(false);
+    const buttons = (!have || added || updated)
+      ? [{ label: have ? 'Update my copy' : 'Add to my map', primary: true, run: () => {
+          addShare(sh); closeShare();
+          toast(have ? 'Updated "' + folderById(sh.folder.id).name + '"' : 'Added "' + sh.folder.name + '" with ' + label + '.' + (syncReady() ? ' It will sync to your other devices.' : ''));
+        } }, { label: 'No thanks', run: closeShare }]
+      : [{ label: 'Show them', primary: true, run: () => { addShare(sh); closeShare(); } }, { label: 'Close', run: closeShare }];
+    openShareModal(have ? 'Shared pins: ' + f.name : 'Shared pins: ' + sh.folder.name, text, '', buttons);
+  }
+
+  // A link like ...#share=z... (or #sync=owner/repo to start sync setup) opened on this device.
+  async function checkLink() {
+    const m = location.hash.match(/^#(share|sync)=(.+)$/);
+    if (!m) return;
+    history.replaceState(null, '', location.pathname + location.search);
+    if (m[1] === 'sync') {
+      const repo = decodeURIComponent(m[2]).trim();
+      if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) return;
+      setPanel(true); window.MHM.showTab('pins');
+      editingSync = true; fillSyncForm(); $('syncRepo').value = repo; setSyncStatus();
+      $('syncToken').focus();
+      toast('Paste your GitHub key and tap Save and sync.');
+      return;
+    }
+    let sh = null;
+    try { sh = readShare(await unpackShare(m[2])); } catch (e) { console.error(e); }
+    if (sh) offerShare(sh); else toast('That share link is broken or cut off. Ask for it again, or for the file.');
+  }
+  window.addEventListener('hashchange', checkLink);
+
   // ---- Backup file ------------------------------------------------------------
   $('btnExport').addEventListener('click', () => {
     const blob = new Blob([JSON.stringify(Object.assign(payload(), { exported: new Date().toISOString() }), null, 1)], { type: 'application/json' });
@@ -573,6 +752,8 @@
     reader.onload = () => {
       let inc;
       try { inc = JSON.parse(reader.result); } catch (err) { toast('That file is not a pin backup.'); return; }
+      const sh = readShare(inc);
+      if (sh) { offerShare(sh); return; } // a shared folder saved as a file
       if (!inc || !Array.isArray(inc.pins)) { toast('That file is not a pin backup.'); return; }
       const before = data.pins.length;
       mergeInto(data, inc);
@@ -727,6 +908,7 @@
   fillSyncForm(); setSyncStatus();
   renderAll();
   if (syncReady()) sync(false);
+  checkLink();
   if (!storageOk) toast('This browser is not saving pins (private mode or storage blocked).');
   else if (!localStorage.getItem('mhm.pinTip')) {
     try { localStorage.setItem('mhm.pinTip', '1'); } catch (e) { /* ignore */ }
@@ -734,5 +916,5 @@
   }
 
   // For tests and the console.
-  window.MHM.pins = { data, mergeInto, payload, sync, parseCoords, showPinPopup };
+  window.MHM.pins = { data, mergeInto, payload, sync, parseCoords, showPinPopup, sharePayload, packShare, unpackShare, readShare };
 })();

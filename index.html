@@ -339,6 +339,12 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
     </section>
 
     <section class="sec">
+      <h3>Commercial Forest</h3>
+      <label class="row"><input type="checkbox" id="chkCf" checked><span class="sw" style="background:repeating-linear-gradient(45deg,#2f7bff 0 3px,transparent 3px 7px);border-color:#2f7bff"></span><span class="lbl">Commercial Forest land <span class="note">Private timberland open to the public on foot for hunting, fishing and trapping. No vehicles or permanent blinds. Tap for owner and rules.</span></span></label>
+      <p class="small" id="cfStatus">Loading Commercial Forest land...</p>
+    </section>
+
+    <section class="sec">
       <h3>Private parcels</h3>
       <label class="row"><input type="checkbox" id="chkParcels" checked><span class="sw" style="background:transparent;border:2px solid #fff4c2;box-shadow:0 0 0 1px rgba(0,0,0,.55)"></span><span class="lbl">Parcel lines <span class="note">Property lines from counties that share them for free. Zoom in to see them; tap for owner and acres.</span></span></label>
       <p class="small" id="parcelStatus"></p>
@@ -397,6 +403,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 <script src="app.js"></script>
 <script src="pins.js"></script>
 <script src="hap.js"></script>
+<script src="cf.js"></script>
 <script src="parcels.js"></script>
 <script src="compass.js"></script>
 </body>

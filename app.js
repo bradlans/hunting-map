@@ -258,7 +258,7 @@
       '<dt>Access</dt><dd class="access-' + esc(p.a) + '">' + esc(ACCESS[p.a] || p.a || 'Unknown') + '</dd>' +
       (p.t ? '<dt>Type</dt><dd>' + esc(p.t) + '</dd>' : '') +
       (p.ac ? '<dt>Size</dt><dd>' + Number(p.ac).toLocaleString() + ' acres</dd>' : '') +
-      '</dl><div class="hint">' + esc(cat.note) + (hits.length > 1 ? ' Â· ' + (hits.length - 1) + ' overlapping area(s)' : '') + '</div></div>';
+      '</dl><div class="hint">' + esc(cat.note) + (hits.length > 1 ? ' · ' + (hits.length - 1) + ' overlapping area(s)' : '') + '</div></div>';
   }
   function windHtml(p) {
     const when = p.t ? new Date(p.t) : null;

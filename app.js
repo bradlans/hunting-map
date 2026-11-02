@@ -258,7 +258,7 @@
       '<dt>Access</dt><dd class="access-' + esc(p.a) + '">' + esc(ACCESS[p.a] || p.a || 'Unknown') + '</dd>' +
       (p.t ? '<dt>Type</dt><dd>' + esc(p.t) + '</dd>' : '') +
       (p.ac ? '<dt>Size</dt><dd>' + Number(p.ac).toLocaleString() + ' acres</dd>' : '') +
-      '</dl><div class="hint">' + esc(cat.note) + (hits.length > 1 ? ' · ' + (hits.length - 1) + ' overlapping area(s)' : '') + '</div></div>';
+      '</dl><div class="hint">' + esc(cat.note) + (hits.length > 1 ? ' Â· ' + (hits.length - 1) + ' overlapping area(s)' : '') + '</div></div>';
   }
   function windHtml(p) {
     const when = p.t ? new Date(p.t) : null;
@@ -390,6 +390,7 @@
     const pad = 12;
     const wind = state.wind ? map.queryRenderedFeatures([[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]], { layers: ['wind'] }) : [];
     if (wind.length) { openPopup(wind[0].geometry.coordinates, windHtml(wind[0].properties)); return; }
+    if (window.MHM.hapClick && window.MHM.hapClick(e)) return; // HAP land (hap.js)
     openPopup(e.lngLat, landHtml(landAt(e.lngLat.lng, e.lngLat.lat)));
   });
   map.on('mouseenter', 'wind', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -401,8 +402,10 @@
     showNearestWind();
     if (firstFix && landLoaded) {
       firstFix = false;
+      const hap = window.MHM.hapAt && window.MHM.hapAt(userPos[0], userPos[1]);
       const hits = landAt(userPos[0], userPos[1]);
-      toast(hits.length ? 'You are on ' + (CATS[hits[0].c] ? CATS[hits[0].c].name.toLowerCase() : 'public land') + (hits[0].n ? ': ' + hits[0].n : '')
+      toast(hap ? 'You are on HAP land: property #' + hap.HAPID + ' (' + String(hap.HuntType || '').trim().replace(/\.$/, '') + '). Check in before hunting.'
+        : hits.length ? 'You are on ' + (CATS[hits[0].c] ? CATS[hits[0].c].name.toLowerCase() : 'public land') + (hits[0].n ? ': ' + hits[0].n : '')
         : 'You are not on mapped public land.');
     }
   });

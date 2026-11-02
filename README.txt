@@ -26,7 +26,10 @@ Pins
   Double-click (computer) or press and hold (phone) the map to drop a pin right there.
   + Pin        - or use the crosshair: move it to the spot and tap "Drop pin here";
                  pick the pin's type and folder, add a name and notes
-  Tap a pin    - details, Edit, Move, Directions
+  Tap a pin    - details, Copy GPS, Edit, Move, Directions
+  Paste GPS    - paste coordinates (Ctrl+V on the map, or the box in + Pin mode) and the
+                 crosshair jumps there; reads 44.24, -85.45 / 44 14 24 N 85 27 0 W /
+                 N44 14.4 W85 27.0 / Google Maps links
   Pins tab     - folders with show/hide checkboxes, rename, delete; tap a pin to go to it
   Pin types    - edit the list of pin types (name, color, 1-2 letter badge)
 

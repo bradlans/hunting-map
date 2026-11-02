@@ -14,14 +14,18 @@ Using it
   Layers tab   - base map, contours, wind, and public land categories
   Hunting only - shows just state forest, state game areas, state parks,
                  national forest and BLM land
+  HAP land     - Hunting Access Program parcels (magenta stripes), live from the
+                 Michigan DNR; tap one for hunt type, check-in rules, hunter limit
+                 and directions to the check-in. A saved copy works with no signal.
   Tap the map  - who owns that spot and whether it's open to the public
   Tap an arrow - station, wind direction and speed, gusts, how old the reading is
   Wind button  - refresh wind now
   GPS button   - (top right) shows where you are and whether you're on public land
 
 Pins
-  + Pin        - move the crosshair to the spot (or tap the map) and drop a pin;
-                 pick its type and folder, add a name and notes
+  Double-click (computer) or press and hold (phone) the map to drop a pin right there.
+  + Pin        - or use the crosshair: move it to the spot and tap "Drop pin here";
+                 pick the pin's type and folder, add a name and notes
   Tap a pin    - details, Edit, Move, Directions
   Pins tab     - folders with show/hide checkboxes, rename, delete; tap a pin to go to it
   Pin types    - edit the list of pin types (name, color, 1-2 letter badge)
@@ -46,4 +50,5 @@ seasons and safety zones.
 Files
   index.html, app.js      the map
   pins.js                 pins, folders, pin types, GitHub sync
+  hap.js                  Hunting Access Program layer (Michigan DNR open data)
   data/public_land.js     public land (USGS PAD-US 4.1, Michigan, simplified)

@@ -110,7 +110,8 @@
 
   map.addControl(new maplibregl.NavigationControl({ visualizePitch: true }), 'top-right');
   const geo = new maplibregl.GeolocateControl({
-    positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showUserHeading: true,
+    // Direction is drawn by compass.js (a view cone that also works standing still).
+    positionOptions: { enableHighAccuracy: true }, trackUserLocation: true, showUserHeading: false,
   });
   map.addControl(geo, 'top-right');
   map.addControl(new maplibregl.ScaleControl({ unit: 'imperial' }), 'bottom-right');
@@ -391,7 +392,10 @@
     const wind = state.wind ? map.queryRenderedFeatures([[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]], { layers: ['wind'] }) : [];
     if (wind.length) { openPopup(wind[0].geometry.coordinates, windHtml(wind[0].properties)); return; }
     if (window.MHM.hapClick && window.MHM.hapClick(e)) return; // HAP land (hap.js)
-    openPopup(e.lngLat, landHtml(landAt(e.lngLat.lng, e.lngLat.lat)));
+    const hits = landAt(e.lngLat.lng, e.lngLat.lat);
+    const parcel = window.MHM.parcelAt && window.MHM.parcelAt(e.point); // county parcels (parcels.js)
+    if (parcel && !hits.length) { openPopup(e.lngLat, '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>'); return; }
+    openPopup(e.lngLat, landHtml(hits) + (parcel ? '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>' : ''));
   });
   map.on('mouseenter', 'wind', () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'wind', () => { map.getCanvas().style.cursor = ''; });

@@ -36,8 +36,16 @@ Pins
   Paste GPS    - paste coordinates (Ctrl+V on the map, or the box in + Pin mode) and the
                  crosshair jumps there; reads 44.24, -85.45 / 44 14 24 N 85 27 0 W /
                  N44 14.4 W85 27.0 / Google Maps links
-  Pins tab     - folders with show/hide checkboxes, rename, delete; tap a pin to go to it
+  Pins tab     - folders with show/hide checkboxes, share, rename, delete; tap a pin to go to it
   Pin types    - edit the list of pin types (name, color, 1-2 letter badge)
+
+Sharing a folder
+  Pins tab > a folder > Share. "Send link" (phone) opens the share sheet for a text or
+  email; "Copy link" copies it; "Save as file" makes a file they open with Import pins.
+  Whoever opens the link sees "Add to my map" and gets the folder with its pins and pin
+  types. Share the same folder again later and their copy updates instead of doubling up
+  (pins they changed keep their changes; pins you deleted stay on their copy).
+  The pins travel inside the link itself, so anyone with the link can see them.
 
 Sync between devices
   Pins are saved on each device. "Sync with GitHub" (Pins tab) keeps them the same
@@ -47,6 +55,9 @@ Sync between devices
   Setup per device: make a fine-grained GitHub key limited to the private pins repo
   with Contents: Read and write, then paste it into the Sync section. The key is kept
   in that device's browser only; revoke it on GitHub if a device is lost.
+  Each person gets their own private pins repo and key, so nobody sees anyone else's
+  pins unless a folder is shared. A setup link fills in the repo name:
+    https://bradlans.github.io/hunting-map/#sync=bradlans/ben-hunting-pins
   Export / Import pins makes a backup file as well.
 
 Wind arrows point DOWNWIND (the way scent drifts). Labels give the direction the wind

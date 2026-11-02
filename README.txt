@@ -17,6 +17,10 @@ Using it
   HAP land     - Hunting Access Program parcels (magenta stripes), live from the
                  Michigan DNR; tap one for hunt type, check-in rules, hunter limit
                  and directions to the check-in. A saved copy works with no signal.
+  Commercial   - Commercial Forest land (blue hatch), live from the Michigan DNR: private
+  Forest         timberland open to the public on foot for hunting, fishing and trapping.
+                 No vehicles, camping or permanent blinds without the owner's OK. Tap for
+                 owner, township/range/section and acres. A saved copy works with no signal.
   Parcels      - private property lines (zoom in close) for the 24 counties that share
                  them free: Allegan, Barry, Cheboygan, Grand Traverse, Ionia, Jackson,
                  Kalamazoo, Kent, Lake, Lenawee, Macomb, Mason, Midland, Monroe,
@@ -71,6 +75,7 @@ Files
   index.html, app.js      the map
   pins.js                 pins, folders, pin types, GitHub sync
   hap.js                  Hunting Access Program layer (Michigan DNR open data)
+  cf.js                   Commercial Forest layer (Michigan DNR open data)
   parcels.js              county parcel lines (each county's free public GIS service)
   compass.js              view cone on the location dot
   data/public_land.js     public land (USGS PAD-US 4.1, Michigan, simplified)

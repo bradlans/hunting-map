@@ -392,6 +392,7 @@
     const wind = state.wind ? map.queryRenderedFeatures([[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]], { layers: ['wind'] }) : [];
     if (wind.length) { openPopup(wind[0].geometry.coordinates, windHtml(wind[0].properties)); return; }
     if (window.MHM.hapClick && window.MHM.hapClick(e)) return; // HAP land (hap.js)
+    if (window.MHM.cfClick && window.MHM.cfClick(e)) return; // Commercial Forest (cf.js)
     const hits = landAt(e.lngLat.lng, e.lngLat.lat);
     const parcel = window.MHM.parcelAt && window.MHM.parcelAt(e.point); // county parcels (parcels.js)
     if (parcel && !hits.length) { openPopup(e.lngLat, '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>'); return; }
@@ -408,7 +409,9 @@
       firstFix = false;
       const hap = window.MHM.hapAt && window.MHM.hapAt(userPos[0], userPos[1]);
       const hits = landAt(userPos[0], userPos[1]);
+      const cf = window.MHM.cfAt && window.MHM.cfAt(userPos[0], userPos[1]);
       toast(hap ? 'You are on HAP land: property #' + hap.HAPID + ' (' + String(hap.HuntType || '').trim().replace(/\.$/, '') + '). Check in before hunting.'
+        : cf ? 'You are on Commercial Forest land: private, open to hunting on foot.'
         : hits.length ? 'You are on ' + (CATS[hits[0].c] ? CATS[hits[0].c].name.toLowerCase() : 'public land') + (hits[0].n ? ': ' + hits[0].n : '')
         : 'You are not on mapped public land.');
     }

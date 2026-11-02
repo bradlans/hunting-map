@@ -133,6 +133,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 .pop .access-RA { color: #b7791f; font-weight: 600; }
 .pop .access-XA { color: #c0392b; font-weight: 600; }
 .pop .hint { font-size: 12px; color: var(--muted); margin-top: 6px; }
+.pop + .pop { border-top: 1px solid var(--line); margin-top: 10px; padding-top: 10px; }
 
 .toast {
   position: absolute; z-index: 7; left: 50%; transform: translateX(-50%); bottom: calc(24px + env(safe-area-inset-bottom, 0px));
@@ -140,6 +141,8 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   max-width: calc(100% - 32px);
 }
 .maplibregl-ctrl-top-right { top: env(safe-area-inset-top, 0px); right: env(safe-area-inset-right, 0px); }
+.view-cone { width: 120px; height: 120px; pointer-events: none; }
+.maplibregl-user-location-dot { z-index: 1; }
 
 /* Panel tabs */
 .tabs { display: flex; gap: 2px; }
@@ -335,6 +338,13 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
     </section>
 
     <section class="sec">
+      <h3>Private parcels</h3>
+      <label class="row"><input type="checkbox" id="chkParcels" checked><span class="sw" style="background:transparent;border:2px solid #fff4c2;box-shadow:0 0 0 1px rgba(0,0,0,.55)"></span><span class="lbl">Parcel lines <span class="note">Property lines from counties that share them for free. Zoom in to see them; tap for owner and acres.</span></span></label>
+      <p class="small" id="parcelStatus"></p>
+      <p class="small" id="parcelCounties"></p>
+    </section>
+
+    <section class="sec">
       <h3>Public land <button class="pill" id="btnHunt" style="box-shadow:none;background:var(--chip);padding:4px 8px;font-size:12px">Hunting only</button></h3>
       <div class="slider"><span>Fill</span><input type="range" id="landOpacity" min="10" max="90" value="45" aria-label="Public land fill opacity"><span id="landOpacityVal">45%</span></div>
       <div id="landGroups"></div>
@@ -377,5 +387,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 <script src="app.js"></script>
 <script src="pins.js"></script>
 <script src="hap.js"></script>
+<script src="parcels.js"></script>
+<script src="compass.js"></script>
 </body>
 </html>

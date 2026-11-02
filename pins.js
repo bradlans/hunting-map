@@ -18,7 +18,7 @@
     { id: 'bed',      name: 'Bedding',       color: '#7b5ea7', badge: 'BD' },
     { id: 'sighting', name: 'Deer sighting', color: '#1e88e5', badge: 'DS' },
     { id: 'parking',  name: 'Parking',       color: '#1565c0', badge: 'P' },
-    { id: 'want',     name: 'Want to hunt',  color: '#e2571c', badge: 'â˜…' },
+    { id: 'want',     name: 'Want to hunt',  color: '#e2571c', badge: '★' },
   ];
   const now = () => Date.now();
 
@@ -164,6 +164,101 @@
   }
   map.once('load', initMap);
 
+  // ---- Coordinates: copy and paste -----------------------------------------------
+  const fmt = (lat, lng) => lat.toFixed(6) + ', ' + lng.toFixed(6);
+  function copyCoords(lat, lng, btn) {
+    const text = fmt(lat, lng);
+    const done = () => {
+      toast('Copied ' + text);
+      if (btn) { btn.textContent = 'Copied'; setTimeout(() => { btn.textContent = 'Copy GPS'; }, 1500); }
+    };
+    const fallback = () => {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.setAttribute('readonly', ''); ta.style.position = 'absolute'; ta.style.left = '-9999px';
+      document.body.appendChild(ta); ta.select();
+      let ok = false;
+      try { ok = document.execCommand('copy'); } catch (e) { ok = false; }
+      ta.remove();
+      if (ok) done(); else toast('Could not copy. Coordinates: ' + text);
+    };
+    if (navigator.clipboard && window.isSecureContext) navigator.clipboard.writeText(text).then(done, fallback);
+    else fallback();
+  }
+  // Reads "44.24, -85.45", "44.24 -85.45", "44°14'24\"N 85°27'0\"W", "N44 14.4 W85 27.0",
+  // and Google Maps links ("@44.24,-85.45"). Returns {lat, lng, note} or null.
+  function parseCoords(raw) {
+    let s = String(raw || '').trim();
+    if (!s) return null;
+    const at = s.match(/@(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/) || s.match(/[?&](?:q|query|ll|destination)=(-?\d+(?:\.\d+)?),\s*(-?\d+(?:\.\d+)?)/);
+    if (at) s = at[1] + ', ' + at[2];
+    s = s.replace(/[°º˚]/g, ' ').replace(/[′’']/g, ' ').replace(/[″"]|''/g, ' ').toUpperCase();
+    const part = str => {
+      const hemi = (str.match(/[NSEW]/) || [''])[0];
+      const nums = (str.match(/-?\d+(?:\.\d+)?/g) || []).map(Number);
+      if (!nums.length || nums.length > 3) return null;
+      const neg = nums[0] < 0;
+      let v = Math.abs(nums[0]) + (nums[1] || 0) / 60 + (nums[2] || 0) / 3600;
+      if (neg || hemi === 'S' || hemi === 'W') v = -v;
+      return { v, hemi };
+    };
+    // Split into the two halves: by hemisphere letters, a comma, or the number count.
+    let halves = null;
+    if (/[NS]/.test(s) && /[EW]/.test(s)) {
+      // Letter before the numbers (N44 14.4) or after them (44 14 24 N).
+      const nums = '(\\d+(?:\\.\\d+)?(?:[\\s,]+\\d+(?:\\.\\d+)?){0,2})';
+      const re = /^\s*[NSEW]/.test(s) ? new RegExp('([NSEW])\\s*' + nums, 'g') : new RegExp(nums + '\\s*([NSEW])', 'g');
+      const found = [];
+      let m;
+      while ((m = re.exec(s)) && found.length < 2) found.push(/^[NSEW]$/.test(m[1]) ? m[1] + ' ' + m[2] : m[2] + ' ' + m[1]);
+      if (found.length === 2) halves = found;
+    }
+    if (!halves && s.indexOf(',') >= 0) halves = s.split(',').slice(0, 2);
+    if (!halves) {
+      const nums = s.match(/-?\d+(?:\.\d+)?/g) || [];
+      if (nums.length === 2) halves = nums;
+      else if (nums.length === 4 || nums.length === 6) { const h = nums.length / 2; halves = [nums.slice(0, h).join(' '), nums.slice(h).join(' ')]; }
+    }
+    if (!halves || halves.length < 2) return null;
+    let a = part(halves[0]), b = part(halves[1]);
+    if (!a || !b) return null;
+    let lat = a.v, lng = b.v, note = '';
+    if (a.hemi === 'E' || a.hemi === 'W' || b.hemi === 'N' || b.hemi === 'S') { lat = b.v; lng = a.v; }
+    else if ((Math.abs(lat) > 90 && Math.abs(lng) <= 90) || (lat < -82 && lat > -91 && lng > 41 && lng < 49)) {
+      const t = lat; lat = lng; lng = t; note = ' (read as longitude, latitude)'; // Michigan typed lng-first
+    }
+    // Michigan longitudes are west; a missing minus sign is the usual slip.
+    if (!a.hemi && !b.hemi && lng > 82 && lng < 91 && lat > 41 && lat < 49) { lng = -lng; note = ' (assumed West)'; }
+    if (!(Math.abs(lat) <= 90 && Math.abs(lng) <= 180)) return null;
+    return { lat, lng, note };
+  }
+  function goToCoords(text) {
+    const c = parseCoords(text);
+    if (!c) {
+      $('coordError').textContent = 'Could not read those coordinates. Try 44.24000, -85.45000';
+      return false;
+    }
+    $('coordError').textContent = '';
+    if (!placing) startPlacing();
+    $('coordInput').value = fmt(c.lat, c.lng);
+    // Jump, not glide: the crosshair must be exactly on the spot the moment Drop is tapped.
+    map.jumpTo({ center: [c.lng, c.lat], zoom: Math.max(map.getZoom(), 16) });
+    $('placeHint').textContent = 'Crosshair is on ' + fmt(c.lat, c.lng) + c.note + '. ' +
+      (movingId ? 'Tap "Move pin here" to move it.' : 'Tap "Drop pin here" to drop a pin.');
+    return true;
+  }
+  $('coordForm').addEventListener('submit', e => { e.preventDefault(); goToCoords($('coordInput').value); });
+  $('coordInput').addEventListener('paste', () => setTimeout(() => goToCoords($('coordInput').value), 0));
+  $('coordInput').addEventListener('input', () => { $('coordError').textContent = ''; });
+  // Pasting coordinates anywhere on the map (not into a text box) jumps the crosshair there.
+  document.addEventListener('paste', e => {
+    const t = e.target;
+    if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+    const text = e.clipboardData && e.clipboardData.getData('text');
+    if (!parseCoords(text)) return;
+    e.preventDefault();
+    goToCoords(text);
+  });
+
   // ---- Pin popup --------------------------------------------------------------
   function showPinPopup(p) {
     const t = typeById(p.type), f = folderById(p.folder);
@@ -178,9 +273,11 @@
       '<dt>Location</dt><dd>' + p.lat.toFixed(5) + ', ' + p.lng.toFixed(5) + '</dd></dl>' +
       (p.note ? '<p class="note-text">' + esc(p.note) + '</p>' : '') +
       '<div class="pin-actions">' +
+      '<button class="btn" data-act="copy">Copy GPS</button>' +
       '<button class="btn" data-act="edit">Edit</button><button class="btn" data-act="move">Move</button>' +
       '<a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=' + p.lat + ',' + p.lng + '">Directions</a>' +
       '</div>';
+    el.querySelector('[data-act="copy"]').addEventListener('click', e => copyCoords(p.lat, p.lng, e.currentTarget));
     el.querySelector('[data-act="edit"]').addEventListener('click', () => { closePopup(); openEditor(p.id); });
     el.querySelector('[data-act="move"]').addEventListener('click', () => { closePopup(); startPlacing(p.id); });
     openPopup([p.lng, p.lat], el, { offset: [0, -34] });
@@ -210,6 +307,7 @@
       ? 'Move the map so the crosshair is on the new spot, or tap the map.'
       : 'Move the map so the crosshair is on the spot, or tap the map.';
     $('btnPlaceHere').textContent = movingId ? 'Move pin here' : 'Drop pin here';
+    $('coordInput').value = ''; $('coordError').textContent = '';
     $('crosshair').hidden = false; $('placebar').hidden = false;
     map.getCanvas().style.cursor = 'crosshair';
   }
@@ -279,7 +377,7 @@
       '<option value="' + esc(t.id) + '"' + (t.id === typeId ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('');
     $('pinFolder').innerHTML = data.folders.map(f =>
       '<option value="' + esc(f.id) + '"' + (f.id === folderId ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') +
-      '<option value="__new">+ New folderâ€¦</option>';
+      '<option value="__new">+ New folder…</option>';
     $('newFolderField').hidden = true; $('pinNewFolder').value = '';
   }
   function openEditor(pinId, point) {
@@ -351,7 +449,7 @@
       return '<div class="folder">' +
         '<div class="folder-head">' +
         '<input type="checkbox" data-fvis="' + esc(f.id) + '"' + (f.visible !== false ? ' checked' : '') + ' aria-label="Show ' + esc(f.name) + ' on the map">' +
-        '<span class="name" data-fopen="' + esc(f.id) + '" role="button" tabindex="0" aria-expanded="' + open + '">' + (open ? 'â–¾ ' : 'â–¸ ') + esc(f.name) + '</span>' +
+        '<span class="name" data-fopen="' + esc(f.id) + '" role="button" tabindex="0" aria-expanded="' + open + '">' + (open ? '▾ ' : '▸ ') + esc(f.name) + '</span>' +
         '<span class="num">' + pins.length + '</span>' +
         (f.id === UNFILED ? '' :
           '<button class="btn ghost" data-fren="' + esc(f.id) + '">Rename</button>' +
@@ -361,7 +459,7 @@
           ? '<ul class="pin-list">' + pins.map(p => {
               const t = typeById(p.type);
               return '<li data-pin="' + esc(p.id) + '"><span class="badge-dot" style="background:' + esc(t.color) + ';color:' + textColorFor(t.color) + '">' + esc((t.badge || '').toUpperCase()) + '</span>' +
-                '<span class="t">' + esc(p.name || t.name) + '<small>' + esc(t.name) + (p.note ? ' Â· ' + esc(p.note.slice(0, 40)) : '') + '</small></span></li>';
+                '<span class="t">' + esc(p.name || t.name) + '<small>' + esc(t.name) + (p.note ? ' · ' + esc(p.note.slice(0, 40)) : '') + '</small></span></li>';
             }).join('') + '</ul>'
           : '<p class="empty">No pins yet.</p>') : '') +
         '</div>';
@@ -636,5 +734,5 @@
   }
 
   // For tests and the console.
-  window.MHM.pins = { data, mergeInto, payload, sync };
+  window.MHM.pins = { data, mergeInto, payload, sync, parseCoords, showPinPopup };
 })();

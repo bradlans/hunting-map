@@ -124,13 +124,13 @@
     const active = isActive(p);
     const youth = /youth|apprentice/i.test(clean(p.HuntType));
     const hab = [['Forest', p.ForestAcres], ['Grass/brush', p.GrasslandandBushAcres], ['Farm', p.AgriculturalAcres], ['Wetland', p.WetlandAcres]]
-      .filter(([, v]) => v > 0).map(([k, v]) => k + ' ' + Math.round(v)).join(' Â· ');
+      .filter(([, v]) => v > 0).map(([k, v]) => k + ' ' + Math.round(v)).join(' · ');
     const hasHq = isFinite(p.HeadquartersLat) && p.HeadquartersLat;
     const el = document.createElement('div');
     el.className = 'pop';
     el.innerHTML =
       '<h4>HAP property #' + esc(p.HAPID) + '</h4>' +
-      '<div class="tag"><i style="background:' + COLOR + '"></i>Hunting Access Program Â· ' + esc(clean(p.COUNTY)) + ' County</div>' +
+      '<div class="tag"><i style="background:' + COLOR + '"></i>Hunting Access Program · ' + esc(clean(p.COUNTY)) + ' County</div>' +
       '<dl>' +
       '<dt>Status</dt><dd class="' + (active ? 'access-OA' : 'access-XA') + '">' + (active ? 'Active - open to HAP hunting' : 'Inactive - NOT open') + '</dd>' +
       (clean(p.HuntType) ? '<dt>Hunt type</dt><dd' + (youth ? ' class="access-RA"' : '') + '>' + esc(clean(p.HuntType)) + '</dd>' : '') +

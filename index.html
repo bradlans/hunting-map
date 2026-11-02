@@ -37,6 +37,7 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
 html, body { height: 100%; margin: 0; }
 body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); overflow: hidden; }
 #map { position: absolute; inset: 0; }
@@ -93,6 +94,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 .grp > .row { font-weight: 600; }
 .grp .kids { padding-left: 28px; }
 .small { font-size: 12.5px; color: var(--muted); margin: 6px 0 0; }
+.small.warn { color: var(--blaze); }
 .slider { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); padding: 2px 0 6px 28px; }
 .slider input { flex: 1; accent-color: var(--blaze); }
 .legend-wind { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); padding: 4px 0 0 28px; }
@@ -138,6 +140,86 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   max-width: calc(100% - 32px);
 }
 .maplibregl-ctrl-top-right { top: env(safe-area-inset-top, 0px); right: env(safe-area-inset-right, 0px); }
+
+/* Panel tabs */
+.tabs { display: flex; gap: 2px; }
+.tabs button {
+  border: 0; background: none; color: var(--muted); cursor: pointer; padding: 6px 8px 7px; border-radius: 7px 7px 0 0;
+  font: 600 16px/1 var(--f-display); letter-spacing: .04em; text-transform: uppercase; border-bottom: 3px solid transparent;
+}
+.tabs button[aria-selected="true"] { color: var(--fg); border-bottom-color: var(--blaze); }
+.tabs .count { font: 600 11px/1 var(--f-body); background: var(--chip); color: var(--muted); border-radius: 9px; padding: 2px 6px; margin-left: 4px; vertical-align: 2px; }
+
+/* Shared small controls */
+.btn {
+  border: 1px solid var(--line); background: var(--bg); color: var(--fg); border-radius: 8px; padding: 6px 10px;
+  font: 500 13.5px var(--f-body); cursor: pointer; display: inline-flex; align-items: center; gap: 6px;
+}
+.btn.primary { background: var(--blaze); color: var(--blaze-ink); border-color: var(--blaze); font-weight: 600; }
+.btn.danger { color: #c0392b; border-color: #e3b1aa; }
+.btn.ghost { border-color: transparent; background: transparent; color: var(--muted); padding: 4px 6px; }
+.btn:disabled { opacity: .45; cursor: default; }
+.field { display: grid; gap: 4px; margin: 0 0 10px; font-size: 13px; color: var(--muted); }
+.field input, .field select, .field textarea, .inline input {
+  font: 15px var(--f-body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; min-width: 0;
+}
+.field textarea { min-height: 64px; resize: vertical; }
+.inline { display: flex; gap: 6px; align-items: center; margin: 8px 0 4px; }
+.inline input[type="text"] { flex: 1; }
+.inline input[type="color"] { width: 38px; height: 34px; padding: 2px; flex: none; }
+.inline input.badge { width: 46px; flex: none; text-align: center; text-transform: uppercase; }
+.badge-dot {
+  width: 24px; height: 24px; border-radius: 50%; flex: none; display: inline-grid; place-items: center;
+  font: 700 10.5px/1 var(--f-body); border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35);
+}
+
+/* Folder and pin lists */
+.folder { border-bottom: 1px solid var(--line); padding: 4px 0; }
+.folder:last-child { border-bottom: 0; }
+.folder-head { display: flex; align-items: center; gap: 8px; min-height: 36px; }
+.folder-head input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--blaze); margin: 0; flex: none; }
+.folder-head .name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
+.folder-head .num { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.pin-list { list-style: none; margin: 0 0 4px; padding: 0 0 0 26px; }
+.pin-list li { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; }
+.pin-list li .t { flex: 1; min-width: 0; }
+.pin-list li .t small { display: block; color: var(--muted); font-size: 12px; }
+.empty { color: var(--muted); font-size: 13px; padding: 4px 0 8px 26px; margin: 0; }
+.type-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--line); }
+.type-row:last-child { border-bottom: 0; }
+.type-row input[type="text"] { flex: 1; min-width: 0; font: 15px var(--f-body); color: var(--fg); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 5px 6px; }
+.type-row input[type="text"]:hover, .type-row input[type="text"]:focus { border-color: var(--line); background: var(--bg); }
+.type-row input[type="color"] { width: 30px; height: 30px; padding: 1px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg); flex: none; }
+.type-row input.badge { width: 40px; text-align: center; text-transform: uppercase; flex: none; border: 1px solid var(--line); background: var(--bg); }
+.type-row .uses { font-size: 12px; color: var(--muted); min-width: 34px; text-align: right; font-variant-numeric: tabular-nums; }
+
+/* Placing a pin */
+.crosshair { position: absolute; z-index: 4; left: 50%; top: 50%; width: 34px; height: 34px; margin: -17px 0 0 -17px; pointer-events: none; }
+.crosshair::before, .crosshair::after { content: ""; position: absolute; background: var(--blaze); box-shadow: 0 0 0 1px rgba(255,255,255,.8); }
+.crosshair::before { left: 16px; top: 0; width: 2px; height: 34px; }
+.crosshair::after { top: 16px; left: 0; height: 2px; width: 34px; }
+.placebar {
+  position: absolute; z-index: 7; left: 50%; transform: translateX(-50%); bottom: calc(18px + env(safe-area-inset-bottom, 0px));
+  background: var(--bg); color: var(--fg); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 12px;
+  display: flex; gap: 8px; align-items: center; flex-wrap: wrap; justify-content: center; max-width: calc(100% - 24px);
+}
+.placebar p { margin: 0; width: 100%; text-align: center; font-size: 13px; color: var(--muted); }
+
+/* Pin editor */
+.editor-wrap { position: absolute; inset: 0; z-index: 8; background: rgba(10, 16, 10, .35); display: grid; place-items: end center; }
+@media (min-width: 800px) { .editor-wrap { place-items: center; } }
+.editor {
+  background: var(--bg); color: var(--fg); width: min(420px, 100%); border-radius: 16px 16px 0 0; box-shadow: var(--shadow);
+  padding: 16px max(16px, env(safe-area-inset-right, 0px)) calc(16px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));
+  max-height: 88%; overflow-y: auto;
+}
+@media (min-width: 800px) { .editor { border-radius: 14px; } }
+.editor h3 { margin: 0 0 12px; font: 600 22px/1 var(--f-display); text-transform: uppercase; letter-spacing: .03em; }
+.editor .actions { display: flex; gap: 8px; justify-content: space-between; flex-wrap: wrap; margin-top: 6px; }
+.editor .actions span { display: flex; gap: 8px; }
+.pop .pin-actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.pop .pin-actions .btn { padding: 4px 8px; font-size: 13px; }
+.pop .note-text { white-space: pre-wrap; font-size: 13px; margin: 6px 0 0; }
 </style>
 </head>
 <body>
@@ -145,16 +227,77 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 
 <div class="topbar">
   <div class="brand"><i aria-hidden="true"></i>Michigan Hunting Map</div>
-  <button class="pill primary" id="btnLayers" aria-controls="panel" aria-expanded="false">Layers</button>
+  <button class="pill" id="btnLayers" aria-controls="panel" aria-expanded="false">Layers</button>
+  <button class="pill primary" id="btnAddPin">+ Pin</button>
   <button class="pill" id="btnWind" title="Refresh wind">Wind <b id="windAge">loading...</b></button>
 </div>
 
-<aside class="panel" id="panel" data-open="false" aria-label="Map layers">
+<aside class="panel" id="panel" data-open="false" aria-label="Map panel">
   <header>
-    <h2>Layers</h2>
-    <button class="close" id="btnClose" aria-label="Close layers">&times;</button>
+    <div class="tabs" role="tablist" aria-label="Panel sections">
+      <button role="tab" id="tabbtn-layers" aria-controls="tab-layers" aria-selected="true" data-tab="layers">Layers</button>
+      <button role="tab" id="tabbtn-pins" aria-controls="tab-pins" aria-selected="false" data-tab="pins">Pins<span class="count" id="pinCount">0</span></button>
+      <button role="tab" id="tabbtn-types" aria-controls="tab-types" aria-selected="false" data-tab="types">Pin types</button>
+    </div>
+    <button class="close" id="btnClose" aria-label="Close panel">&times;</button>
   </header>
-  <div class="scroll">
+
+  <div class="scroll" id="tab-pins" role="tabpanel" aria-labelledby="tabbtn-pins" hidden>
+    <section class="sec">
+      <h3>Sync with GitHub</h3>
+      <div id="syncOn" hidden>
+        <p class="small" id="syncStatus" style="margin:0 0 8px" aria-live="polite"></p>
+        <div class="inline" style="margin-top:0">
+          <button class="btn primary" type="button" id="btnSyncNow">Sync now</button>
+          <button class="btn ghost" type="button" id="btnSyncSetup">Change settings</button>
+        </div>
+      </div>
+      <form id="syncForm" autocomplete="off">
+        <p class="small" style="margin:0 0 8px">Keeps your pins the same on your phone and computer through a private GitHub repo. Set it up once on each device.</p>
+        <label class="field">Private repo <input type="text" id="syncRepo" placeholder="yourname/hunting-pins" autocapitalize="off" spellcheck="false"></label>
+        <label class="field">GitHub key <input type="password" id="syncToken" placeholder="github_pat_..." autocapitalize="off" spellcheck="false"></label>
+        <p class="small warn" id="syncError" style="margin:-4px 0 8px" aria-live="polite"></p>
+        <div class="inline" style="margin-top:0">
+          <button class="btn primary" type="submit">Save and sync</button>
+          <button class="btn ghost" type="button" id="btnSyncForget">Remove key</button>
+        </div>
+        <p class="small" style="margin:8px 0 0">The key is stored in this browser only. <a href="https://github.com/settings/personal-access-tokens/new" target="_blank" rel="noopener" style="color:inherit">Make a key on GitHub</a></p>
+      </form>
+    </section>
+    <section class="sec">
+      <h3>Folders <span><button class="btn ghost" id="btnShowAll">Show all</button><button class="btn ghost" id="btnHideAll">Hide all</button></span></h3>
+      <div id="folderList"></div>
+      <form class="inline" id="formFolder">
+        <input type="text" id="newFolderName" placeholder="New folder, e.g. North 40" aria-label="New folder name" maxlength="40">
+        <button class="btn" type="submit">Add folder</button>
+      </form>
+    </section>
+    <section class="sec">
+      <h3>Backup</h3>
+      <p class="small" style="margin:0 0 8px">Pins are saved on this device only. Export a backup file to keep them safe or to move them to another phone or computer.</p>
+      <div class="inline">
+        <button class="btn" id="btnExport">Export pins</button>
+        <label class="btn" for="importFile">Import pins</label>
+        <input type="file" id="importFile" accept=".json,application/json" hidden>
+      </div>
+    </section>
+  </div>
+
+  <div class="scroll" id="tab-types" role="tabpanel" aria-labelledby="tabbtn-types" hidden>
+    <section class="sec">
+      <h3>Pin types</h3>
+      <p class="small" style="margin:0 0 6px">These are the choices when you drop a pin. Edit the name, color or 1–2 letter badge. A type in use can't be deleted until its pins are changed.</p>
+      <div id="typeList"></div>
+      <form class="inline" id="formType">
+        <input type="color" id="newTypeColor" value="#e2571c" aria-label="New type color">
+        <input type="text" class="badge" id="newTypeBadge" maxlength="2" placeholder="AB" aria-label="New type badge">
+        <input type="text" id="newTypeName" placeholder="New type, e.g. Tracks" maxlength="30" aria-label="New type name">
+        <button class="btn" type="submit">Add</button>
+      </form>
+    </section>
+  </div>
+
+  <div class="scroll" id="tab-layers" role="tabpanel" aria-labelledby="tabbtn-layers">
     <section class="sec">
       <h3>Base map</h3>
       <div class="seg" role="group" aria-label="Base map">
@@ -186,9 +329,33 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   </div>
 </aside>
 
+<div class="crosshair" id="crosshair" hidden></div>
+<div class="placebar" id="placebar" hidden>
+  <p id="placeHint">Move the map so the crosshair is on the spot, or tap the map.</p>
+  <button class="btn primary" id="btnPlaceHere">Drop pin here</button>
+  <button class="btn" id="btnPlaceGps">At my location</button>
+  <button class="btn ghost" id="btnPlaceCancel">Cancel</button>
+</div>
+
+<div class="editor-wrap" id="editorWrap" hidden>
+  <form class="editor" id="pinForm" aria-labelledby="editorTitle">
+    <h3 id="editorTitle">New pin</h3>
+    <label class="field">Type <select id="pinType"></select></label>
+    <label class="field">Folder <select id="pinFolder"></select></label>
+    <label class="field" id="newFolderField" hidden>New folder name <input type="text" id="pinNewFolder" maxlength="40" placeholder="e.g. Swamp edge"></label>
+    <label class="field">Name <input type="text" id="pinName" maxlength="60" placeholder="Optional, e.g. Big scrape line"></label>
+    <label class="field">Notes <textarea id="pinNote" maxlength="1000" placeholder="Optional"></textarea></label>
+    <div class="actions">
+      <button class="btn danger" type="button" id="btnPinDelete">Delete</button>
+      <span><button class="btn" type="button" id="btnPinCancel">Cancel</button><button class="btn primary" type="submit">Save pin</button></span>
+    </div>
+  </form>
+</div>
+
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <script src="app.js"></script>
+<script src="pins.js"></script>
 </body>
 </html>

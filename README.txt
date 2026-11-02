@@ -1,23 +1,17 @@
-MICHIGAN HUNTING MAP - version 1
+MICHIGAN HUNTING MAP - version 2
 
 What it is
-  A web map that replaces the Google Earth setup: satellite / hybrid / topo base maps,
-  contour lines, Michigan public land by category (tick categories on/off), and live
-  wind arrows from NWS stations that refresh on their own every 10 minutes.
+  A web map for hunting Michigan: satellite / hybrid / topo base maps, contour lines,
+  public land by category (tick categories on/off), live wind arrows from NWS stations,
+  and your own pins in folders, synced between devices through a private GitHub repo.
 
-On this PC
-  Double-click index.html. It opens in your web browser. Needs internet for the base
-  maps and wind; the public land data is in data\public_land.js.
-
-On your phone
-  The folder has to be on a web host (phones can't open it from Dropbox). Upload the
-  whole "Hunting Map App" folder to a free static host such as Netlify, Cloudflare
-  Pages or GitHub Pages, then open the link on your phone and choose "Add to Home
-  Screen". Allow location when asked to get the GPS dot.
-  Note: anyone with the link can open the page. It only holds public data.
+Open it
+  https://bradlans.github.io/hunting-map/
+  On a phone, open the link and choose "Add to Home Screen". Allow location when asked
+  to get the GPS dot.
 
 Using it
-  Layers       - base map, contours, wind, and public land categories
+  Layers tab   - base map, contours, wind, and public land categories
   Hunting only - shows just state forest, state game areas, state parks,
                  national forest and BLM land
   Tap the map  - who owns that spot and whether it's open to the public
@@ -25,13 +19,31 @@ Using it
   Wind button  - refresh wind now
   GPS button   - (top right) shows where you are and whether you're on public land
 
-Arrows point DOWNWIND (the way scent drifts). Labels give the direction the wind is
-coming FROM, then mph, g = gusts. Green under 8 mph, yellow 8-14, orange 15-24, red 25+.
+Pins
+  + Pin        - move the crosshair to the spot (or tap the map) and drop a pin;
+                 pick its type and folder, add a name and notes
+  Tap a pin    - details, Edit, Move, Directions
+  Pins tab     - folders with show/hide checkboxes, rename, delete; tap a pin to go to it
+  Pin types    - edit the list of pin types (name, color, 1-2 letter badge)
+
+Sync between devices
+  Pins are saved on each device. "Sync with GitHub" (Pins tab) keeps them the same
+  everywhere by merging with pins.json in a private repo. It syncs when the app opens,
+  when it comes back to the front, when signal returns, and shortly after any change.
+  Newest edit wins per pin, and deletes carry over.
+  Setup per device: make a fine-grained GitHub key limited to the private pins repo
+  with Contents: Read and write, then paste it into the Sync section. The key is kept
+  in that device's browser only; revoke it on GitHub if a device is lost.
+  Export / Import pins makes a backup file as well.
+
+Wind arrows point DOWNWIND (the way scent drifts). Labels give the direction the wind
+is coming FROM, then mph, g = gusts. Green under 8 mph, yellow 8-14, orange 15-24,
+red 25+.
 
 Boundaries are approximate (USGS PAD-US 4.1). Always check Michigan DNR rules,
 seasons and safety zones.
 
 Files
-  index.html, app.js      the app
-  data\public_land.js     public land, built from ..\PADUS4_1_MI\PADUS4_1Fee_StateMI.kmz
-  serve.ps1               small local web server, only for testing
+  index.html, app.js      the map
+  pins.js                 pins, folders, pin types, GitHub sync
+  data/public_land.js     public land (USGS PAD-US 4.1, Michigan, simplified)

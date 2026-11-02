@@ -271,10 +271,14 @@
       '</dl><div class="hint">Arrow points downwind, the way scent drifts.</div></div>';
   }
   let popup = null;
-  function openPopup(lngLat, html) {
+  // content: an HTML string, or a DOM node when the popup has buttons wired up.
+  function openPopup(lngLat, content, opts) {
     if (popup) popup.remove();
-    popup = new maplibregl.Popup({ maxWidth: '300px', focusAfterOpen: false }).setLngLat(lngLat).setHTML(html).addTo(map);
+    popup = new maplibregl.Popup(Object.assign({ maxWidth: '300px', focusAfterOpen: false }, opts)).setLngLat(lngLat);
+    if (typeof content === 'string') popup.setHTML(content); else popup.setDOMContent(content);
+    popup.addTo(map);
   }
+  function closePopup() { if (popup) { popup.remove(); popup = null; } }
 
   // ---- UI wiring --------------------------------------------------------------
   const $ = id => document.getElementById(id);
@@ -327,6 +331,14 @@
     $('panel').dataset.open = String(open);
     $('btnLayers').setAttribute('aria-expanded', String(open));
   }
+  function showTab(name) {
+    document.querySelectorAll('[data-tab]').forEach(b => {
+      const on = b.dataset.tab === name;
+      b.setAttribute('aria-selected', String(on));
+      $('tab-' + b.dataset.tab).hidden = !on;
+    });
+  }
+  document.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => showTab(b.dataset.tab)));
   let toastTimer = null;
   function toast(msg) {
     const t = $('toast'); t.textContent = msg; t.hidden = false;
@@ -374,6 +386,7 @@
   });
 
   map.on('click', e => {
+    if (window.MHM.onMapClick && window.MHM.onMapClick(e)) return; // pins (pins.js)
     const pad = 12;
     const wind = state.wind ? map.queryRenderedFeatures([[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]], { layers: ['wind'] }) : [];
     if (wind.length) { openPopup(wind[0].geometry.coordinates, windHtml(wind[0].properties)); return; }
@@ -395,4 +408,7 @@
   });
   geo.on('trackuserlocationend', () => { firstFix = true; });
   geo.on('error', () => toast('Location is off or blocked. Allow location for this page to see where you are.'));
+
+  // Shared with pins.js
+  window.MHM = { map, toast, openPopup, closePopup, esc, $, setPanel, showTab, geo, getUserPos: () => userPos };
 })();

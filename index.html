@@ -183,6 +183,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 .folder-head input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--blaze); margin: 0; flex: none; }
 .folder-head .name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .folder-head .num { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.folder-actions { display: flex; gap: 2px; padding-left: 20px; margin: -6px 0 0; }
 .pin-list { list-style: none; margin: 0 0 4px; padding: 0 0 0 26px; }
 .pin-list li { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; }
 .pin-list li .t { flex: 1; min-width: 0; }
@@ -379,6 +380,15 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
       <span><button class="btn" type="button" id="btnPinCancel">Cancel</button><button class="btn primary" type="submit">Save pin</button></span>
     </div>
   </form>
+</div>
+
+<div class="editor-wrap" id="shareWrap" hidden>
+  <div class="editor" role="dialog" aria-modal="true" aria-labelledby="shareTitle">
+    <h3 id="shareTitle">Share folder</h3>
+    <p class="small" id="shareText" style="margin:0 0 8px"></p>
+    <p class="small warn" id="shareWarn" style="margin:0 0 10px"></p>
+    <div class="actions"><span id="shareBtns" style="flex-wrap:wrap"></span></div>
+  </div>
 </div>
 
 <div class="toast" id="toast" hidden></div>

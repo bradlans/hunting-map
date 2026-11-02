@@ -18,7 +18,7 @@
     { id: 'bed',      name: 'Bedding',       color: '#7b5ea7', badge: 'BD' },
     { id: 'sighting', name: 'Deer sighting', color: '#1e88e5', badge: 'DS' },
     { id: 'parking',  name: 'Parking',       color: '#1565c0', badge: 'P' },
-    { id: 'want',     name: 'Want to hunt',  color: '#e2571c', badge: '★' },
+    { id: 'want',     name: 'Want to hunt',  color: '#e2571c', badge: 'â˜…' },
   ];
   const now = () => Date.now();
 
@@ -188,6 +188,7 @@
 
   // Map taps: placing a pin wins, then tapping an existing pin.
   window.MHM.onMapClick = e => {
+    if (now() < suppressClickUntil) return true; // the tap that ended a press-and-hold
     if (placing) { finishPlacing(e.lngLat); return true; }
     if (!map.getLayer('pins')) return false;
     const pad = 10;
@@ -203,6 +204,7 @@
   const narrow = () => !window.matchMedia('(min-width: 800px)').matches;
   function startPlacing(moveId) {
     placing = true; movingId = moveId || null;
+    $('btnAddPin').textContent = 'Cancel pin'; $('btnAddPin').setAttribute('aria-pressed', 'true');
     if (narrow()) setPanel(false);
     $('placeHint').textContent = movingId
       ? 'Move the map so the crosshair is on the new spot, or tap the map.'
@@ -213,6 +215,7 @@
   }
   function stopPlacing() {
     placing = false;
+    $('btnAddPin').textContent = '+ Pin'; $('btnAddPin').setAttribute('aria-pressed', 'false');
     $('crosshair').hidden = true; $('placebar').hidden = true;
     map.getCanvas().style.cursor = '';
   }
@@ -226,7 +229,39 @@
     }
     openEditor(null, ll);
   }
-  $('btnAddPin').addEventListener('click', () => (placing ? stopPlacing() : startPlacing()));
+  $('btnAddPin').addEventListener('click', () => { if (placing) { stopPlacing(); movingId = null; } else startPlacing(); });
+
+  // Quick drop: double-click (mouse) or press and hold (touch) opens a new pin right there.
+  let pressTimer = null, pressAt = null, suppressClickUntil = 0;
+  const dropAt = (lng, lat) => { closePopup(); openEditor(null, { lng: +lng.toFixed(6), lat: +lat.toFixed(6) }); };
+  map.doubleClickZoom.disable();
+  map.on('dblclick', e => {
+    e.preventDefault();
+    if (placing || !$('editorWrap').hidden) return;
+    dropAt(e.lngLat.lng, e.lngLat.lat);
+  });
+  const box = map.getCanvasContainer();
+  const touchPoint = t => { const r = box.getBoundingClientRect(); return [t.clientX - r.left, t.clientY - r.top]; };
+  function cancelPress() { clearTimeout(pressTimer); pressTimer = null; }
+  box.addEventListener('touchstart', ev => {
+    cancelPress();
+    if (ev.touches.length !== 1 || placing || !$('editorWrap').hidden) return;
+    pressAt = touchPoint(ev.touches[0]);
+    pressTimer = setTimeout(() => {
+      pressTimer = null;
+      const ll = map.unproject(pressAt);
+      suppressClickUntil = now() + 800;
+      if (navigator.vibrate) navigator.vibrate(30);
+      dropAt(ll.lng, ll.lat);
+    }, 550);
+  }, { passive: true });
+  box.addEventListener('touchmove', ev => {
+    if (!pressTimer) return;
+    const p = touchPoint(ev.touches[0]);
+    if (ev.touches.length !== 1 || Math.hypot(p[0] - pressAt[0], p[1] - pressAt[1]) > 10) cancelPress();
+  }, { passive: true });
+  ['touchend', 'touchcancel'].forEach(n => box.addEventListener(n, cancelPress, { passive: true }));
+  box.addEventListener('contextmenu', ev => { if (ev.pointerType === 'touch' || now() < suppressClickUntil) ev.preventDefault(); });
   $('btnPlaceHere').addEventListener('click', () => finishPlacing(map.getCenter()));
   $('btnPlaceCancel').addEventListener('click', () => { stopPlacing(); movingId = null; });
   $('btnPlaceGps').addEventListener('click', () => {
@@ -244,7 +279,7 @@
       '<option value="' + esc(t.id) + '"' + (t.id === typeId ? ' selected' : '') + '>' + esc(t.name) + '</option>').join('');
     $('pinFolder').innerHTML = data.folders.map(f =>
       '<option value="' + esc(f.id) + '"' + (f.id === folderId ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('') +
-      '<option value="__new">+ New folder…</option>';
+      '<option value="__new">+ New folderâ€¦</option>';
     $('newFolderField').hidden = true; $('pinNewFolder').value = '';
   }
   function openEditor(pinId, point) {
@@ -316,7 +351,7 @@
       return '<div class="folder">' +
         '<div class="folder-head">' +
         '<input type="checkbox" data-fvis="' + esc(f.id) + '"' + (f.visible !== false ? ' checked' : '') + ' aria-label="Show ' + esc(f.name) + ' on the map">' +
-        '<span class="name" data-fopen="' + esc(f.id) + '" role="button" tabindex="0" aria-expanded="' + open + '">' + (open ? '▾ ' : '▸ ') + esc(f.name) + '</span>' +
+        '<span class="name" data-fopen="' + esc(f.id) + '" role="button" tabindex="0" aria-expanded="' + open + '">' + (open ? 'â–¾ ' : 'â–¸ ') + esc(f.name) + '</span>' +
         '<span class="num">' + pins.length + '</span>' +
         (f.id === UNFILED ? '' :
           '<button class="btn ghost" data-fren="' + esc(f.id) + '">Rename</button>' +
@@ -326,7 +361,7 @@
           ? '<ul class="pin-list">' + pins.map(p => {
               const t = typeById(p.type);
               return '<li data-pin="' + esc(p.id) + '"><span class="badge-dot" style="background:' + esc(t.color) + ';color:' + textColorFor(t.color) + '">' + esc((t.badge || '').toUpperCase()) + '</span>' +
-                '<span class="t">' + esc(p.name || t.name) + '<small>' + esc(t.name) + (p.note ? ' · ' + esc(p.note.slice(0, 40)) : '') + '</small></span></li>';
+                '<span class="t">' + esc(p.name || t.name) + '<small>' + esc(t.name) + (p.note ? ' Â· ' + esc(p.note.slice(0, 40)) : '') + '</small></span></li>';
             }).join('') + '</ul>'
           : '<p class="empty">No pins yet.</p>') : '') +
         '</div>';
@@ -595,6 +630,10 @@
   renderAll();
   if (syncReady()) sync(false);
   if (!storageOk) toast('This browser is not saving pins (private mode or storage blocked).');
+  else if (!localStorage.getItem('mhm.pinTip')) {
+    try { localStorage.setItem('mhm.pinTip', '1'); } catch (e) { /* ignore */ }
+    setTimeout(() => toast(matchMedia('(pointer: coarse)').matches ? 'Tip: press and hold the map to drop a pin.' : 'Tip: double-click the map to drop a pin.'), 2500);
+  }
 
   // For tests and the console.
   window.MHM.pins = { data, mergeInto, payload, sync };

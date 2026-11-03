@@ -1114,8 +1114,9 @@
     toast('Imported ' + n + ' item' + (n === 1 ? '' : 's') + ' from Google Earth.');
   }
   // From the measure tool's Save button: name and file the line or area just measured.
-  function saveMeasured(kind, coords, done) {
-    openShapeEditor(null, { kind, coords: coords.map(c => [+(+c[0]).toFixed(6), +(+c[1]).toFixed(6)]), done });
+  // Also used by Map route (route.js), which passes a starting name and note.
+  function saveMeasured(kind, coords, done, name, note) {
+    openShapeEditor(null, { kind, coords: coords.map(c => [+(+c[0]).toFixed(6), +(+c[1]).toFixed(6)]), done, name: name || '', note: note || '' });
   }
   const meters = (a, b) => {
     const r = d => d * Math.PI / 180, h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2;

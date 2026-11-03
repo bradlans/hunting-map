@@ -229,6 +229,28 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 .measurebar .seg button { border: 0; background: var(--bg); color: var(--fg); font: 500 13.5px var(--f-body); padding: 6px 10px; cursor: pointer; }
 .measurebar .seg button[aria-pressed="true"] { background: var(--blaze); color: var(--blaze-ink); }
 
+/* Friends and location sharing */
+.pill.sharing { background: var(--blaze); color: var(--blaze-ink); }
+.pill .live-dot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; background: currentColor; margin-right: 6px; animation: live 1.6s ease-in-out infinite; }
+@keyframes live { 50% { opacity: .25; } }
+@media (prefers-reduced-motion: reduce) { .pill .live-dot { animation: none; } }
+.share-switch { display: flex; align-items: center; gap: 12px; padding: 10px 12px; border: 1px solid var(--line); border-radius: 12px; cursor: pointer; }
+.share-switch .lbl { flex: 1; font-weight: 600; font-size: 16px; }
+.share-switch input { position: absolute; opacity: 0; width: 1px; height: 1px; }
+.share-switch .track { width: 52px; height: 30px; border-radius: 15px; background: var(--chip); position: relative; flex: none; transition: background .15s; }
+.share-switch .track::after { content: ""; position: absolute; top: 3px; left: 3px; width: 24px; height: 24px; border-radius: 50%; background: #fff; box-shadow: 0 1px 3px rgba(0,0,0,.4); transition: left .15s; }
+.share-switch input:checked + .track { background: var(--blaze); }
+.share-switch input:checked + .track::after { left: 25px; }
+.share-switch input:focus-visible + .track { outline: 2px solid var(--blaze); outline-offset: 2px; }
+.share-for { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; font-size: 13px; color: var(--muted); }
+.share-for select { font: 14px var(--f-body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; }
+.friend-list { list-style: none; margin: 10px 0 6px; padding: 0; border-top: 1px solid var(--line); }
+.friend-list li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
+.friend-list li i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); flex: none; }
+.friend-list li .t { flex: 1; min-width: 0; font-weight: 600; }
+.friend-list li .t small { display: block; font-weight: 400; color: var(--muted); font-size: 12.5px; }
+.friend-list li.empty { color: var(--muted); font-size: 13px; cursor: default; }
+
 /* Pin editor */
 .editor-wrap { position: absolute; inset: 0; z-index: 8; background: rgba(10, 16, 10, .35); display: grid; place-items: end center; }
 @media (min-width: 800px) { .editor-wrap { place-items: center; } }
@@ -254,6 +276,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   <button class="pill" id="btnLayers" aria-controls="panel" aria-expanded="false">Layers</button>
   <button class="pill primary" id="btnAddPin">+ Pin</button>
   <button class="pill" id="btnWind" title="Refresh wind">Wind <b id="windAge">loading...</b></button>
+  <button class="pill" id="btnFriends" aria-pressed="false" title="Friends and location sharing">Friends</button>
 </div>
 
 <aside class="panel" id="panel" data-open="false" aria-label="Map panel">
@@ -422,6 +445,28 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   </div>
 </div>
 
+<div class="editor-wrap" id="friendsWrap" hidden>
+  <div class="editor" role="dialog" aria-modal="true" aria-labelledby="friendsTitle">
+    <h3 id="friendsTitle">Friends</h3>
+    <label class="share-switch"><span class="lbl">Share my location</span><input type="checkbox" id="chkShareLoc"><span class="track" aria-hidden="true"></span></label>
+    <div class="share-for">
+      <label for="shareFor">Share for</label>
+      <select id="shareFor">
+        <option value="1">1 hour</option>
+        <option value="2">2 hours</option>
+        <option value="4" selected>4 hours</option>
+        <option value="8">8 hours</option>
+        <option value="12">12 hours</option>
+      </select>
+      <span>then it turns off by itself</span>
+    </div>
+    <p class="small" id="shareStatus" aria-live="polite" style="margin:4px 0 0"></p>
+    <ul class="friend-list" id="friendList"></ul>
+    <p class="small" style="margin:0 0 8px">Your spot updates about once a minute while the map is open on your screen. Phones pause it when the screen is off, so a friend's dot shows when they were last seen. Never use it to decide if a shot is safe.</p>
+    <div class="actions"><button class="btn" type="button" id="btnFriendsRefresh">Refresh</button><button class="btn primary" type="button" id="btnFriendsClose">Close</button></div>
+  </div>
+</div>
+
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
@@ -432,5 +477,6 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 <script src="parcels.js"></script>
 <script src="compass.js"></script>
 <script src="measure.js"></script>
+<script src="friends.js"></script>
 </body>
 </html>

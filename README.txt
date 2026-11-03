@@ -70,12 +70,18 @@ Friends (location sharing)
   Friends button (top) > "Share my location" switch, and pick how long (1-12 hours).
   It turns off by itself at the end; flip the switch to stop early. While on, the
   button turns orange and says "Sharing".
+  Share with   - tick the friends who can see you (you can change it while sharing).
+                 Friends appear in this list once they've opened Friends on their own
+                 map. Someone new starts unticked. The map hides your dot from anyone
+                 you didn't tick, but anyone who opens the shared-pins repo itself on
+                 GitHub could still read it.
   Your spot is sent about once a minute while the map is open on screen. Phones pause
   it when the screen is off or you switch apps, so a friend's dot (purple, gray once
   it's 10+ minutes old) shows where they were last seen. Tap a dot or a name in the
   list for distance and direction from you, Copy GPS and Directions.
   Never use it to decide whether a shot is safe.
-  Stored in bradlans/shared-pins as locations/<name>.json; turning sharing off
+  Stored in bradlans/shared-pins as locations/<name>.json (with the list of who it's
+  for) and people/<name>.json (the group list); turning sharing off
   deletes the file. GitHub keeps past versions, so the repo holds a history of spots
   sent while sharing was on.
 

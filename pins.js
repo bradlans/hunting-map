@@ -32,6 +32,9 @@
     d.folders = Array.isArray(d.folders) ? d.folders : [];
     d.pins = Array.isArray(d.pins) ? d.pins : [];
     d.deleted = d.deleted && typeof d.deleted === 'object' ? d.deleted : {};
+    d.joined = Array.isArray(d.joined) ? d.joined : []; // live shared folders this person is in
+    d.sharedMeta = d.sharedMeta && typeof d.sharedMeta === 'object' ? d.sharedMeta : {}; // this device's copy of each one's deletes and members
+    d.me = d.me && d.me.name ? d.me : null; // name shown on pins edited in shared folders
     d.last = d.last || {};
     return tidy(d);
   }
@@ -61,11 +64,32 @@
   const typeById = id => data.types.find(t => t.id === id) || data.types[0];
   const folderById = id => data.folders.find(f => f.id === id) || data.folders[0];
   const pinById = id => data.pins.find(p => p.id === id);
+  // A folder is live-shared when it is in the joined list. Its pins live in its own file in
+  // the shared repo, not in this person's pins.json.
+  const isShared = fid => data.joined.some(j => j.id === fid);
+  const myName = () => (data.me ? data.me.name : '');
+  function stampPin(p) {
+    stamp(p);
+    if (isShared(p.folder)) p.by = myName(); else delete p.by;
+    return p;
+  }
+  // A deleted pin is remembered where it lived: the shared folder's file or pins.json.
+  function tombPin(p) {
+    if (isShared(p.folder)) data.sharedMeta[p.folder].deleted['p:' + p.id] = now();
+    else tomb('p', p.id);
+  }
+  // One pin id lives in one place; if two copies meet, the newest edit wins.
+  function dedupe() {
+    const best = new Map();
+    data.pins.forEach(p => { const c = best.get(p.id); if (!c || (p.updatedAt || 0) > (c.updatedAt || 0)) best.set(p.id, p); });
+    if (best.size !== data.pins.length) data.pins = Array.from(best.values());
+  }
 
   // ---- Merging (sync and import) ------------------------------------------------
   const validType = t => t && t.id && t.name && /^#[0-9a-f]{6}$/i.test(t.color || '');
   const validFolder = f => f && f.id && f.name;
   const validPin = p => p && p.id && isFinite(p.lng) && isFinite(p.lat);
+  const validJoin = j => j && /^[\w-]{1,40}$/.test(j.id || '');
   function mergeInto(target, inc) {
     const tombs = Object.assign({}, target.deleted);
     Object.keys(inc.deleted || {}).forEach(k => { if (!(tombs[k] >= inc.deleted[k])) tombs[k] = inc.deleted[k]; });
@@ -84,18 +108,23 @@
     // Which folders are shown is a per-device choice, so it never comes from another device.
     target.folders = mergeList('f', target.folders, inc.folders, validFolder, cur => ({ visible: cur ? cur.visible !== false : true }));
     target.pins = mergeList('p', target.pins, inc.pins, validPin);
+    if (target.joined || inc.joined) target.joined = mergeList('j', target.joined || [], inc.joined, validJoin);
+    if (inc.me && inc.me.name && (!target.me || (inc.me.updatedAt || 0) > (target.me.updatedAt || 0))) target.me = { name: String(inc.me.name).slice(0, 30), updatedAt: inc.me.updatedAt || 0 };
     const cutoff = now() - 180 * 864e5; // forget deletes after six months
     Object.keys(tombs).forEach(k => { if (tombs[k] < cutoff) delete tombs[k]; });
     target.deleted = tombs;
     tidy(target);
   }
-  // What goes to GitHub (and to an exported backup).
+  // What goes to GitHub (and to an exported backup). Shared folders are listed by id only;
+  // their pins are in the shared repo.
   function payload() {
     return {
-      app: 'michigan-hunting-map', version: 2,
+      app: 'michigan-hunting-map', version: 3,
       types: data.types.map(t => ({ id: t.id, name: t.name, color: t.color, badge: t.badge || '', updatedAt: t.updatedAt || 0 })),
-      folders: data.folders.map(f => ({ id: f.id, name: f.name, updatedAt: f.updatedAt || 0 })),
-      pins: data.pins.map(p => ({ id: p.id, lng: p.lng, lat: p.lat, type: p.type, folder: p.folder, name: p.name || '', note: p.note || '', created: p.created, updatedAt: p.updatedAt || 0 })),
+      folders: data.folders.filter(f => !isShared(f.id)).map(f => ({ id: f.id, name: f.name, updatedAt: f.updatedAt || 0 })),
+      pins: data.pins.filter(p => !isShared(p.folder)).map(p => ({ id: p.id, lng: p.lng, lat: p.lat, type: p.type, folder: p.folder, name: p.name || '', note: p.note || '', created: p.created, updatedAt: p.updatedAt || 0 })),
+      joined: data.joined.map(j => ({ id: j.id, name: j.name || '', updatedAt: j.updatedAt || 0 })),
+      me: data.me,
       deleted: data.deleted,
     };
   }
@@ -272,8 +301,9 @@
     el.innerHTML =
       '<h4>' + esc(p.name || t.name) + '</h4>' +
       '<div class="tag"><span class="badge-dot" style="background:' + esc(t.color) + ';color:' + textColorFor(t.color) + '">' + esc((t.badge || '').toUpperCase()) + '</span>' + esc(t.name) + '</div>' +
-      '<dl><dt>Folder</dt><dd>' + esc(f.name) + '</dd>' +
+      '<dl><dt>Folder</dt><dd>' + esc(f.name) + (isShared(f.id) ? ' <span class="chip-shared">Shared</span>' : '') + '</dd>' +
       (when ? '<dt>Added</dt><dd>' + esc(when) + '</dd>' : '') +
+      (isShared(f.id) && p.by ? '<dt>Edited</dt><dd>' + esc(p.by) + ', ' + esc(ago(p.updatedAt)) + '</dd>' : '') +
       '<dt>Location</dt><dd>' + p.lat.toFixed(5) + ', ' + p.lng.toFixed(5) + '</dd></dl>' +
       (p.note ? '<p class="note-text">' + esc(p.note) + '</p>' : '') +
       '<div class="pin-actions">' +
@@ -326,7 +356,7 @@
     const moving = movingId; stopPlacing(); movingId = null;
     if (moving) {
       const p = pinById(moving);
-      if (p) { p.lng = ll.lng; p.lat = ll.lat; stamp(p); changed(); toast('Pin moved'); }
+      if (p) { p.lng = ll.lng; p.lat = ll.lat; stampPin(p); changed(); toast('Pin moved'); }
       return;
     }
     openEditor(null, ll);
@@ -415,8 +445,10 @@
       folder = addFolder(name).id;
     }
     const fields = { type: $('pinType').value, folder, name: $('pinName').value.trim(), note: $('pinNote').value.trim() };
-    if (editing) stamp(Object.assign(editing, fields));
-    else data.pins.push(stamp(Object.assign({ id: uid('p'), lng: editPoint.lng, lat: editPoint.lat, created: new Date().toISOString() }, fields)));
+    // Moving a pin into or out of a shared folder: leave a delete behind where it was.
+    if (editing && editing.folder !== folder && (isShared(editing.folder) || isShared(folder))) tombPin(editing);
+    if (editing) stampPin(Object.assign(editing, fields));
+    else data.pins.push(stampPin(Object.assign({ id: uid('p'), lng: editPoint.lng, lat: editPoint.lat, created: new Date().toISOString() }, fields)));
     data.last = { type: fields.type, folder: fields.folder };
     const f = folderById(folder);
     if (f.visible === false) { f.visible = true; toast('Folder "' + f.name + '" was hidden, so it is shown again.'); }
@@ -434,7 +466,7 @@
   $('btnPinDelete').addEventListener('click', () => {
     if (!editing) return;
     if (!deleteArmed) { deleteArmed = true; $('btnPinDelete').textContent = 'Tap again to delete'; return; }
-    tomb('p', editing.id);
+    tombPin(editing);
     data.pins = data.pins.filter(p => p !== editing);
     changed(); closeEditor(); toast('Pin deleted');
   });
@@ -451,17 +483,29 @@
     $('folderList').innerHTML = data.folders.map(f => {
       const pins = data.pins.filter(p => p.folder === f.id);
       const open = !collapsed.has(f.id);
+      const shared = isShared(f.id), meta = data.sharedMeta[f.id] || {};
+      const id = esc(f.id);
       return '<div class="folder">' +
         '<div class="folder-head">' +
-        '<input type="checkbox" data-fvis="' + esc(f.id) + '"' + (f.visible !== false ? ' checked' : '') + ' aria-label="Show ' + esc(f.name) + ' on the map">' +
-        '<span class="name" data-fopen="' + esc(f.id) + '" role="button" tabindex="0" aria-expanded="' + open + '">' + (open ? '▾ ' : '▸ ') + esc(f.name) + '</span>' +
+        '<input type="checkbox" data-fvis="' + id + '"' + (f.visible !== false ? ' checked' : '') + ' aria-label="Show ' + esc(f.name) + ' on the map">' +
+        '<span class="name" data-fopen="' + id + '" role="button" tabindex="0" aria-expanded="' + open + '">' + (open ? '▾ ' : '▸ ') + esc(f.name) + '</span>' +
+        (shared ? '<span class="chip-shared">Shared</span>' : '') +
         '<span class="num">' + pins.length + '</span>' +
         '</div>' +
-        (open && f.id !== UNFILED ?
+        (open && shared ?
+          '<p class="shared-line' + (meta.error ? ' warn' : '') + '">' +
+          esc(meta.error || ((Object.keys(meta.members || {}).sort().join(', ') || 'Just you so far') + ' · ' + (meta.last ? 'updated ' + ago(meta.last) : 'not synced yet'))) + '</p>' +
           '<div class="folder-actions">' +
-          '<button class="btn ghost" data-fshare="' + esc(f.id) + '">Share</button>' +
-          '<button class="btn ghost" data-fren="' + esc(f.id) + '">Rename</button>' +
-          '<button class="btn ghost" data-fdel="' + esc(f.id) + '">Delete</button>' +
+          '<button class="btn ghost" data-fsync="' + id + '">Refresh</button>' +
+          '<button class="btn ghost" data-finvite="' + id + '">Invite</button>' +
+          '<button class="btn ghost" data-fren="' + id + '">Rename</button>' +
+          '<button class="btn ghost" data-fleave="' + id + '">Leave</button>' +
+          '</div>'
+        : open && f.id !== UNFILED ?
+          '<div class="folder-actions">' +
+          '<button class="btn ghost" data-fshare="' + id + '">Share</button>' +
+          '<button class="btn ghost" data-fren="' + id + '">Rename</button>' +
+          '<button class="btn ghost" data-fdel="' + id + '">Delete</button>' +
           '</div>' : '') +
         (open ? (pins.length
           ? '<ul class="pin-list">' + pins.map(p => {
@@ -480,10 +524,18 @@
     save(); renderMap();
   });
   $('folderList').addEventListener('click', e => {
-    const el = e.target.closest('[data-fopen],[data-fshare],[data-fren],[data-fdel],[data-pin]');
+    const el = e.target.closest('[data-fopen],[data-fshare],[data-fsync],[data-finvite],[data-fleave],[data-fren],[data-fdel],[data-pin]');
     if (!el) return;
     if (el.dataset.fshare) {
-      openShareOut(folderById(el.dataset.fshare));
+      openShareChoice(folderById(el.dataset.fshare));
+    } else if (el.dataset.fsync) {
+      const id = el.dataset.fsync;
+      el.textContent = 'Refreshing...';
+      syncShared(id).then(() => { renderFolders(); const m = data.sharedMeta[id]; toast(m && m.error ? m.error : 'Up to date'); });
+    } else if (el.dataset.finvite) {
+      openInvite(folderById(el.dataset.finvite));
+    } else if (el.dataset.fleave) {
+      leaveShared(el.dataset.fleave);
     } else if (el.dataset.fopen) {
       const id = el.dataset.fopen;
       collapsed.has(id) ? collapsed.delete(id) : collapsed.add(id);
@@ -717,9 +769,10 @@
 
   // A link like ...#share=z... (or #sync=owner/repo to start sync setup) opened on this device.
   async function checkLink() {
-    const m = location.hash.match(/^#(share|sync)=(.+)$/);
+    const m = location.hash.match(/^#(share|sync|join)=(.+)$/);
     if (!m) return;
     history.replaceState(null, '', location.pathname + location.search);
+    if (m[1] === 'join') { joinFromLink(decodeURIComponent(m[2])); return; }
     if (m[1] === 'sync') {
       const repo = decodeURIComponent(m[2]).trim();
       if (!/^[\w.-]+\/[\w.-]+$/.test(repo)) return;
@@ -786,42 +839,87 @@
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     return new TextDecoder().decode(bytes);
   }
-  function gh(path, opts) {
-    return fetch('https://api.github.com/repos/' + cfg.repo + path, Object.assign({ cache: 'no-store' }, opts, {
+  // Live shared folders sit next to everyone's own pins repo, owned by the same account:
+  // bradlans/ben-hunting-pins -> bradlans/shared-pins, one file per folder.
+  const sharedRepo = () => cfg.repo.split('/')[0] + '/shared-pins';
+  const sharedFile = id => 'folders/' + id + '.json';
+
+  function gh(repo, path, opts) {
+    return fetch('https://api.github.com/repos/' + repo + path, Object.assign({ cache: 'no-store' }, opts, {
       headers: Object.assign({
         Accept: 'application/vnd.github+json', Authorization: 'Bearer ' + cfg.token, 'X-GitHub-Api-Version': '2022-11-28',
       }, (opts && opts.headers) || {}),
     }));
   }
   class SyncError extends Error { constructor(msg) { super(msg); this.friendly = true; } }
-  async function explain(res) {
+  async function explain(res, repo) {
     if (res.status === 401) return new SyncError('GitHub did not accept the key. It may have expired; make a new one and enter it again.');
-    if (res.status === 403) return new SyncError('The key cannot write to ' + cfg.repo + '. Give it "Contents: Read and write" on that repo.');
-    if (res.status === 404) return new SyncError('Repo ' + cfg.repo + ' was not found, or the key does not include it.');
+    if (res.status === 403) return new SyncError('The key cannot write to ' + repo + '. Give it "Contents: Read and write" on that repo.');
+    if (res.status === 404) return new SyncError('Repo ' + repo + ' was not found, or the key does not include it.');
     return new SyncError('GitHub answered ' + res.status + '. Try again in a minute.');
   }
-  async function pull() {
-    const res = await gh('/contents/' + FILE);
+  // Returns {sha, json}, or null when the repo is there but the file isn't yet.
+  async function pullFile(repo, file) {
+    const res = await gh(repo, '/contents/' + file);
     if (res.status === 404) {
-      const repo = await gh('');
-      if (!repo.ok) throw await explain(repo);
-      return null; // repo is there, file isn't yet
+      const r = await gh(repo, '');
+      if (!r.ok) throw await explain(r, repo);
+      return null;
     }
-    if (!res.ok) throw await explain(res);
+    if (!res.ok) throw await explain(res, repo);
     const j = await res.json();
     return { sha: j.sha, json: JSON.parse(b64decode(j.content || '')) };
   }
-  async function push(text, sha) {
-    const res = await gh('/contents/' + FILE, {
+  // Returns false when someone else saved first (pull again and retry).
+  async function pushFile(repo, file, obj, sha, message) {
+    const res = await gh(repo, '/contents/' + file, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: 'Sync pins (' + data.pins.length + ')', content: b64encode(text), sha: sha || undefined }),
+      body: JSON.stringify({ message, content: b64encode(JSON.stringify(obj, null, 1)), sha: sha || undefined }),
     });
-    if (res.status === 409 || res.status === 422) return false; // someone else synced first; pull again
-    if (!res.ok) throw await explain(res);
+    if (res.status === 409 || res.status === 422) return false;
+    if (!res.ok) throw await explain(res, repo);
     return true;
   }
-  const canonical = o => JSON.stringify({ types: o.types, folders: o.folders, pins: o.pins, deleted: o.deleted });
+  // Pull, merge, and save back only if something changed; retried if two saves collide.
+  async function syncFile(repo, file, merge, out, same, message) {
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const remote = await pullFile(repo, file);
+      if (merge(remote) === false) return;
+      const o = out();
+      if (remote && same(remote.json, o)) return;
+      if (await pushFile(repo, file, o, remote && remote.sha, message())) return;
+    }
+    throw new SyncError('Someone else kept saving at the same moment. Try again.');
+  }
+  const canonical = o => JSON.stringify({ types: o.types, folders: o.folders, pins: o.pins, deleted: o.deleted, joined: o.joined || [], me: o.me || null });
+
+  // This person's pins.json covers everything except shared folders, which are left alone.
+  function mergePersonal(inc) {
+    const shared = new Set(data.joined.map(j => j.id));
+    const mine = x => !shared.has(x);
+    const view = { types: data.types, folders: data.folders.filter(f => mine(f.id)), pins: data.pins.filter(p => mine(p.folder)), deleted: data.deleted, joined: data.joined, me: data.me };
+    mergeInto(view, Object.assign({}, inc, { folders: (inc.folders || []).filter(f => f && mine(f.id)), pins: (inc.pins || []).filter(p => p && mine(p.folder)) }));
+    data.types = view.types; data.deleted = view.deleted; data.joined = view.joined; data.me = view.me;
+    data.folders = view.folders.concat(data.folders.filter(f => !mine(f.id)));
+    data.pins = view.pins.concat(data.pins.filter(p => !mine(p.folder)));
+    reconcileJoined();
+  }
+  // Match folders on this device to the joined list (joined or left on another device).
+  function reconcileJoined() {
+    const ids = new Set(data.joined.map(j => j.id));
+    data.joined.forEach(j => {
+      if (!data.folders.some(f => f.id === j.id)) data.folders.push({ id: j.id, name: j.name || 'Shared folder', visible: true, updatedAt: 0 });
+      if (!data.sharedMeta[j.id]) data.sharedMeta[j.id] = { deleted: {}, members: {} };
+    });
+    Object.keys(data.sharedMeta).forEach(id => {
+      if (ids.has(id)) return;
+      data.folders = data.folders.filter(f => f.id !== id);
+      data.pins = data.pins.filter(p => p.folder !== id);
+      delete data.sharedMeta[id];
+    });
+    dedupe();
+  }
 
   async function sync(manual) {
     if (!syncReady()) { if (manual) toast('Set up GitHub sync first.'); return; }
@@ -830,16 +928,13 @@
     syncing = true; clearTimeout(syncTimer);
     setSyncStatus('Syncing...');
     try {
-      let done = false;
-      for (let attempt = 0; attempt < 3 && !done; attempt++) {
-        const remote = await pull();
-        if (remote) { mergeInto(data, remote.json); save(); renderAll(); }
-        const out = payload();
-        done = remote && canonical(remote.json) === canonical(out) ? true : await push(JSON.stringify(out, null, 1), remote && remote.sha);
-      }
-      if (!done) throw new SyncError('Another device kept syncing at the same moment. Try again.');
+      await syncFile(cfg.repo, FILE,
+        remote => { if (remote) { mergePersonal(remote.json); save(); renderAll(); } },
+        payload, (a, b) => canonical(a) === canonical(b),
+        () => 'Sync pins (' + data.pins.filter(p => !isShared(p.folder)).length + ')');
       cfg.last = now(); cfg.error = ''; saveCfg();
       setSyncStatus();
+      for (const j of data.joined.slice()) await syncShared(j.id);
       if (manual) toast('Synced: ' + data.pins.length + ' pins');
     } catch (err) {
       const msg = err.friendly ? err.message : (navigator.onLine ? 'Could not reach GitHub. Try again in a minute.' : 'Offline. Pins will sync when you have signal.');
@@ -904,6 +999,190 @@
   window.addEventListener('online', () => { if (syncReady()) sync(false); });
   setInterval(() => { if (syncReady() && !syncing) setSyncStatus(); }, 30000);
 
+  // ---- Live shared folders ---------------------------------------------------------
+  // One shared folder = one file, folders/<id>.json in the shared repo, holding the folder's
+  // name, pins, deletes and who has joined. Everyone in it merges with that file the same
+  // way their own pins.json is merged: on open, on Refresh, and shortly after a change.
+  const SHARED_APP = 'mhm-shared-folder';
+  const sortKeys = o => Object.keys(o || {}).sort().map(k => [k, o[k]]);
+  const pinRow = p => [p.id, p.lng, p.lat, p.type, p.name || '', p.note || '', p.created || '', p.by || '', p.updatedAt || 0];
+  const canonShared = o => JSON.stringify([o.folder ? [o.folder.name, o.folder.updatedAt || 0] : null, (o.pins || []).map(pinRow).sort(), sortKeys(o.deleted), sortKeys(o.members)]);
+
+  function sharedPayload(id) {
+    const f = data.folders.find(x => x.id === id), meta = data.sharedMeta[id];
+    const pins = data.pins.filter(p => p.folder === id);
+    const used = new Set(pins.map(p => p.type));
+    return {
+      app: SHARED_APP, v: 1,
+      folder: { id, name: f.name, updatedAt: f.updatedAt || 0 },
+      types: data.types.filter(t => used.has(t.id)).map(t => ({ id: t.id, name: t.name, color: t.color, badge: t.badge || '' })),
+      pins: pins.map(p => ({ id: p.id, lng: p.lng, lat: p.lat, type: p.type, name: p.name || '', note: p.note || '', created: p.created, by: p.by || '', updatedAt: p.updatedAt || 0 })),
+      deleted: meta.deleted, members: meta.members,
+    };
+  }
+  function mergeShared(id, s) {
+    if (!s || s.app !== SHARED_APP) return;
+    const meta = data.sharedMeta[id], local = data.folders.find(f => f.id === id);
+    const str = (v, n) => String(v == null ? '' : v).slice(0, n);
+    // Pin types someone else uses are added; your own types are never changed.
+    (Array.isArray(s.types) ? s.types : []).filter(validType).forEach(t => {
+      if (data.types.some(x => x.id === t.id)) return;
+      const nt = { id: str(t.id, 40), name: str(t.name, 30), color: t.color, badge: str(t.badge, 2), updatedAt: 0 };
+      data.types.push(nt); refreshIcon(nt);
+    });
+    const view = { types: data.types, folders: [local], pins: data.pins.filter(p => p.folder === id), deleted: meta.deleted };
+    mergeInto(view, {
+      types: [],
+      folders: s.folder && s.folder.name ? [{ id, name: str(s.folder.name, 40), updatedAt: +s.folder.updatedAt || 0 }] : [],
+      pins: (Array.isArray(s.pins) ? s.pins : []).filter(validPin).map(p => ({
+        id: str(p.id, 40), lng: +p.lng, lat: +p.lat, type: str(p.type, 40), folder: id, name: str(p.name, 60), note: str(p.note, 1000),
+        created: p.created ? str(p.created, 30) : undefined, by: str(p.by, 30), updatedAt: +p.updatedAt || 0,
+      })),
+      deleted: s.deleted && typeof s.deleted === 'object' ? s.deleted : {},
+    });
+    const mf = view.folders.find(x => x.id === id);
+    if (mf) { local.name = mf.name; local.updatedAt = mf.updatedAt; }
+    data.pins = data.pins.filter(p => p.folder !== id).concat(view.pins.filter(p => p.folder === id));
+    meta.deleted = view.deleted;
+    Object.keys(s.members || {}).forEach(n => { const t = +s.members[n] || 0; if (n && !(meta.members[n] >= t)) meta.members[str(n, 30)] = t; });
+    dedupe();
+  }
+  async function syncShared(id, strict) {
+    const meta = data.sharedMeta[id];
+    if (!meta || !syncReady()) return;
+    if (!navigator.onLine) { meta.error = 'Offline. Changes sync when you have signal.'; renderFolders(); return; }
+    if (myName() && !meta.members[myName()]) meta.members[myName()] = now();
+    let gone = false;
+    try {
+      await syncFile(sharedRepo(), sharedFile(id),
+        remote => {
+          if (remote) { mergeShared(id, remote.json); return; }
+          if (!meta.pending) { gone = true; return false; } // file removed on GitHub
+        },
+        () => sharedPayload(id), (a, b) => canonShared(a) === canonShared(b),
+        () => 'Update ' + data.folders.find(f => f.id === id).name + (myName() ? ' (' + myName() + ')' : ''));
+      if (gone) { folderGone(id); return; }
+      meta.pending = false; meta.last = now(); meta.error = '';
+    } catch (err) {
+      meta.error = err.friendly ? err.message : 'Could not reach GitHub. Try again in a minute.';
+      if (!err.friendly) console.error(err);
+      if (strict) throw err;
+    } finally {
+      save(); renderFolders(); renderMap();
+    }
+  }
+  function folderGone(id) {
+    const f = data.folders.find(x => x.id === id);
+    tomb('j', id);
+    data.joined = data.joined.filter(j => j.id !== id);
+    delete data.sharedMeta[id];
+    changed();
+    toast('"' + (f ? f.name : 'A shared folder') + '" is no longer shared. Your copy was kept as a private folder.');
+  }
+  function askName() {
+    if (myName()) return true;
+    const n = window.prompt('Your first name? It shows the others who added or changed a pin in a shared folder.', '');
+    if (!n || !n.trim()) return false;
+    data.me = { name: n.trim().slice(0, 30), updatedAt: now() };
+    save();
+    return true;
+  }
+
+  function openShareChoice(f) {
+    openShareModal('Share "' + f.name + '"',
+      'Share live: the people you invite can see, add and edit this folder\'s pins, and everyone stays in step. Send a copy: they get the pins as they are right now.',
+      '', [
+        { label: 'Share live', primary: true, run: () => { closeShare(); shareLive(f); } },
+        { label: 'Send a copy', run: () => { closeShare(); openShareOut(f); } },
+        { label: 'Close', run: closeShare },
+      ]);
+  }
+  async function shareLive(f) {
+    if (!syncReady()) { toast('Set up GitHub sync first (Pins tab), then share live.'); return; }
+    if (!askName()) return;
+    data.joined.push({ id: f.id, name: f.name, updatedAt: now() });
+    data.sharedMeta[f.id] = { deleted: {}, members: { [myName()]: now() }, pending: true };
+    data.pins.forEach(p => { if (p.folder === f.id && !p.by) p.by = myName(); });
+    save(); renderAll();
+    toast('Sharing "' + f.name + '"...');
+    try {
+      await syncShared(f.id, true);
+    } catch (err) {
+      data.joined = data.joined.filter(j => j.id !== f.id);
+      delete data.sharedMeta[f.id];
+      save(); renderAll();
+      toast((err.friendly ? err.message : 'Could not reach GitHub.') + ' The folder was not shared.');
+      return;
+    }
+    scheduleSync(1000); // pins.json now lists the folder instead of holding its pins
+    openInvite(f);
+  }
+  function openInvite(f) {
+    const url = location.origin + location.pathname + '#join=' + f.id;
+    const buttons = [];
+    if (navigator.share) buttons.push({ label: 'Send link', primary: true, run: () => {
+      navigator.share({ title: f.name + ' (shared hunting pins)', text: 'Join my shared hunting pins folder "' + f.name + '":', url })
+        .then(closeShare, err => { if (err && err.name !== 'AbortError') toast('Could not open sharing. Use Copy link.'); });
+    } });
+    buttons.push({ label: 'Copy link', primary: !navigator.share, run: el => copyText(url).then(ok => {
+      if (!ok) { toast('Could not copy the link.'); return; }
+      el.textContent = 'Copied'; toast('Invite link copied.');
+    }) });
+    buttons.push({ label: 'Close', run: closeShare });
+    openShareModal('Invite to "' + f.name + '"',
+      'Send this link to the people you want in this folder. When they open it they can join, and then add, edit and delete its pins. Changes show up for everyone when the map opens or they tap Refresh.',
+      'Their GitHub key needs access to ' + sharedRepo() + '.', buttons);
+  }
+  async function joinFromLink(id) {
+    if (!/^[\w-]{1,40}$/.test(id)) { toast('That invite link is broken. Ask for it again.'); return; }
+    if (!syncReady()) {
+      setPanel(true); window.MHM.showTab('pins');
+      toast('Set up GitHub sync first, then open the invite link again.');
+      return;
+    }
+    if (isShared(id)) { toast('You are already in this folder. Refreshing it.'); syncShared(id); return; }
+    let remote;
+    try { remote = await pullFile(sharedRepo(), sharedFile(id)); }
+    catch (err) { toast(err.friendly ? err.message + ' Ask to have shared-pins added to your key.' : 'Could not reach GitHub. Try the link again in a minute.'); return; }
+    if (!remote || !remote.json || remote.json.app !== SHARED_APP) { toast('That shared folder is not there anymore.'); return; }
+    const s = remote.json, name = String((s.folder && s.folder.name) || 'Shared folder').slice(0, 40);
+    const n = Array.isArray(s.pins) ? s.pins.length : 0, who = Object.keys(s.members || {}).sort().join(', ');
+    if (narrow()) setPanel(false);
+    openShareModal('Join "' + name + '"?',
+      (who ? 'Shared by ' + who + '. ' : '') + n + ' pin' + (n === 1 ? '' : 's') + '. Everyone in it can add, edit and delete its pins, and changes show up for everyone when they refresh.',
+      '', [
+        { label: 'Join', primary: true, run: () => {
+          if (!askName()) return;
+          data.joined.push({ id, name, updatedAt: now() });
+          data.sharedMeta[id] = { deleted: {}, members: { [myName()]: now() } };
+          reconcileJoined();
+          const f = data.folders.find(x => x.id === id);
+          f.visible = true; collapsed.delete(id);
+          mergeShared(id, s);
+          closeShare(); changed(); scheduleSync(1000);
+          const pins = data.pins.filter(p => p.folder === id);
+          if (pins.length) {
+            const b = new maplibregl.LngLatBounds();
+            pins.forEach(p => b.extend([p.lng, p.lat]));
+            map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 0 });
+          }
+          toast('Joined "' + f.name + '"');
+        } },
+        { label: 'No thanks', run: closeShare },
+      ]);
+  }
+  function leaveShared(id) {
+    const f = data.folders.find(x => x.id === id);
+    if (!window.confirm('Leave "' + f.name + '"? It comes off your map. Everyone else keeps it.')) return;
+    tomb('j', id);
+    data.joined = data.joined.filter(j => j.id !== id);
+    data.folders = data.folders.filter(x => x.id !== id);
+    data.pins = data.pins.filter(p => p.folder !== id);
+    delete data.sharedMeta[id];
+    changed();
+    toast('Left "' + f.name + '"');
+  }
+
   function renderAll() { renderFolders(); renderTypes(); renderMap(); }
   fillSyncForm(); setSyncStatus();
   renderAll();
@@ -916,5 +1195,5 @@
   }
 
   // For tests and the console.
-  window.MHM.pins = { data, mergeInto, payload, sync, parseCoords, showPinPopup, sharePayload, packShare, unpackShare, readShare };
+  window.MHM.pins = { data, mergeInto, payload, sync, syncShared, openEditor, parseCoords, showPinPopup, sharePayload, packShare, unpackShare, readShare };
 })();

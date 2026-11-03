@@ -147,5 +147,5 @@
     onRemove() {},
   }, 'top-right');
 
-  if (map.loaded()) initLayers(); else map.once('load', initLayers);
+  window.MHM.onLoad(initLayers);
 })();

@@ -281,10 +281,11 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 
 <div class="topbar">
   <div class="brand"><i aria-hidden="true"></i>Michigan Hunting Map</div>
-  <button class="pill" id="btnLayers" aria-controls="panel" aria-expanded="false">Layers</button>
+  <button class="pill" id="btnLayers" aria-controls="panel" aria-expanded="false">Layers and Pins</button>
   <button class="pill primary" id="btnAddPin">+ Pin</button>
   <button class="pill" id="btnWind" title="Refresh wind">Wind <b id="windAge">loading...</b></button>
   <button class="pill" id="btnFriends" aria-pressed="false" title="Friends and location sharing">Friends</button>
+  <button class="pill" id="btnRoute" aria-pressed="false" title="Record your route with GPS">Map route</button>
 </div>
 
 <aside class="panel" id="panel" data-open="false" aria-label="Map panel">
@@ -430,6 +431,14 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   <button class="btn primary" id="btnMeasureDone" type="button">Done</button>
 </div>
 
+<div class="placebar measurebar" id="routebar" hidden>
+  <p id="routeReadout" aria-live="polite"></p>
+  <button class="btn" id="btnRoutePause" type="button">Pause</button>
+  <button class="btn primary" id="btnRouteSave" type="button">Save</button>
+  <button class="btn danger" id="btnRouteDiscard" type="button">Discard</button>
+  <button class="btn ghost" id="btnRouteHide" type="button">Hide</button>
+</div>
+
 <div class="editor-wrap" id="editorWrap" hidden>
   <form class="editor" id="pinForm" aria-labelledby="editorTitle">
     <h3 id="editorTitle">New pin</h3>
@@ -504,5 +513,6 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 <script src="compass.js"></script>
 <script src="measure.js"></script>
 <script src="friends.js"></script>
+<script src="route.js"></script>
 </body>
 </html>

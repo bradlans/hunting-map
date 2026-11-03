@@ -98,6 +98,12 @@
     },
   });
 
+  // The other scripts can finish downloading after the map's one 'load' event (slow phone
+  // signal), so they add their layers through onLoad, which runs at once if it already fired.
+  let mapLoaded = false;
+  map.once('load', () => { mapLoaded = true; });
+  const onLoad = fn => (mapLoaded ? fn() : map.once('load', fn));
+
   function colorExpr() {
     const e = ['match', ['get', 'c']];
     ALL_CODES.forEach(c => e.push(c, CATS[c].color));
@@ -421,5 +427,5 @@
   geo.on('error', () => toast('Location is off or blocked. Allow location for this page to see where you are.'));
 
   // Shared with pins.js
-  window.MHM = { map, toast, openPopup, closePopup, esc, $, setPanel, showTab, geo, getUserPos: () => userPos };
+  window.MHM = { map, onLoad, toast, openPopup, closePopup, esc, $, setPanel, showTab, geo, getUserPos: () => userPos };
 })();

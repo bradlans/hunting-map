@@ -104,6 +104,15 @@ Sync between devices
     https://bradlans.github.io/hunting-map/#sync=bradlans/ben-hunting-pins
   Export / Import pins makes a backup file as well.
 
+Importing from Google Earth
+  Pins tab > Backup > Import pins, then pick a .kml or .kmz (in Google Earth: right-click
+  a folder or place > Save Place As). Every placemark point becomes a pin: its name and
+  description come along, its Google Earth folder becomes the pin folder (made if it
+  doesn't exist), and the type is picked from the name (scrape, rub, stand/blind, trail
+  cam, bedding, parking, deer sighting), or "Imported" if unclear. Lines and shapes are
+  skipped. Places already on the map (same name, same spot) are skipped, so importing
+  the same file twice is safe.
+
 Wind arrows point DOWNWIND (the way scent drifts). Labels give the direction the wind
 is coming FROM, then mph, g = gusts. Green under 8 mph, yellow 8-14, orange 15-24,
 red 25+.

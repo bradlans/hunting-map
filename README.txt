@@ -66,6 +66,19 @@ How live sharing is stored
   Each person's GitHub key needs Contents: Read and write on bradlans/shared-pins
   as well as their own pins repo.
 
+Friends (location sharing)
+  Friends button (top) > "Share my location" switch, and pick how long (1-12 hours).
+  It turns off by itself at the end; flip the switch to stop early. While on, the
+  button turns orange and says "Sharing".
+  Your spot is sent about once a minute while the map is open on screen. Phones pause
+  it when the screen is off or you switch apps, so a friend's dot (purple, gray once
+  it's 10+ minutes old) shows where they were last seen. Tap a dot or a name in the
+  list for distance and direction from you, Copy GPS and Directions.
+  Never use it to decide whether a shot is safe.
+  Stored in bradlans/shared-pins as locations/<name>.json; turning sharing off
+  deletes the file. GitHub keeps past versions, so the repo holds a history of spots
+  sent while sharing was on.
+
 Sync between devices
   Pins are saved on each device. "Sync with GitHub" (Pins tab) keeps them the same
   everywhere by merging with pins.json in a private repo. It syncs when the app opens,
@@ -94,4 +107,5 @@ Files
   parcels.js              county parcel lines (each county's free public GIS service)
   compass.js              view cone on the location dot
   measure.js              measure tool (distance and area)
+  friends.js              friend location sharing
   data/public_land.js     public land (USGS PAD-US 4.1, Michigan, simplified)

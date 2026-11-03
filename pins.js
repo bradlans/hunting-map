@@ -191,7 +191,7 @@
     map.on('mouseleave', 'pins', () => { map.getCanvas().style.cursor = placing ? 'crosshair' : ''; });
     renderMap();
   }
-  map.once('load', initMap);
+  window.MHM.onLoad(initMap);
 
   // ---- Coordinates: copy and paste -----------------------------------------------
   const fmt = (lat, lng) => lat.toFixed(6) + ', ' + lng.toFixed(6);

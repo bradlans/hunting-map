@@ -387,6 +387,7 @@
   });
 
   map.on('click', e => {
+    if (window.MHM.measureClick && window.MHM.measureClick(e)) return; // measure tool (measure.js)
     if (window.MHM.onMapClick && window.MHM.onMapClick(e)) return; // pins (pins.js)
     const pad = 12;
     const wind = state.wind ? map.queryRenderedFeatures([[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + pad]], { layers: ['wind'] }) : [];

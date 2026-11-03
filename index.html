@@ -219,6 +219,16 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   border: 1px solid var(--line); border-radius: 8px; padding: 7px 9px; font-variant-numeric: tabular-nums;
 }
 
+/* Measure tool */
+.maplibregl-ctrl-group button.measure-btn { display: grid; place-items: center; color: #333; }
+.maplibregl-ctrl-group button.measure-btn[aria-pressed="true"] { background: var(--blaze); color: var(--blaze-ink); }
+.measurebar { width: min(560px, calc(100% - 24px)); gap: 6px; }
+.measurebar p { color: var(--fg); font-size: 14px; }
+.measurebar p b { font-size: 17px; font-variant-numeric: tabular-nums; }
+.measurebar .seg { display: inline-flex; border: 1px solid var(--line); border-radius: 8px; overflow: hidden; }
+.measurebar .seg button { border: 0; background: var(--bg); color: var(--fg); font: 500 13.5px var(--f-body); padding: 6px 10px; cursor: pointer; }
+.measurebar .seg button[aria-pressed="true"] { background: var(--blaze); color: var(--blaze-ink); }
+
 /* Pin editor */
 .editor-wrap { position: absolute; inset: 0; z-index: 8; background: rgba(10, 16, 10, .35); display: grid; place-items: end center; }
 @media (min-width: 800px) { .editor-wrap { place-items: center; } }
@@ -376,6 +386,18 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   <button class="btn ghost" id="btnPlaceCancel">Cancel</button>
 </div>
 
+<div class="placebar measurebar" id="measurebar" hidden>
+  <p id="measureReadout" aria-live="polite"></p>
+  <span class="seg" role="group" aria-label="Measure">
+    <button type="button" id="measureLine" aria-pressed="true">Distance</button>
+    <button type="button" id="measureArea" aria-pressed="false">Area</button>
+  </span>
+  <button class="btn" id="btnMeasureMe" type="button">From me</button>
+  <button class="btn" id="btnMeasureUndo" type="button">Undo</button>
+  <button class="btn" id="btnMeasureClear" type="button">Clear</button>
+  <button class="btn primary" id="btnMeasureDone" type="button">Done</button>
+</div>
+
 <div class="editor-wrap" id="editorWrap" hidden>
   <form class="editor" id="pinForm" aria-labelledby="editorTitle">
     <h3 id="editorTitle">New pin</h3>
@@ -409,5 +431,6 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 <script src="cf.js"></script>
 <script src="parcels.js"></script>
 <script src="compass.js"></script>
+<script src="measure.js"></script>
 </body>
 </html>

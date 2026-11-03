@@ -326,11 +326,11 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
     </section>
     <section class="sec">
       <h3>Backup</h3>
-      <p class="small" style="margin:0 0 8px">Pins are saved on this device only. Export a backup file to keep them safe or to move them to another phone or computer.</p>
+      <p class="small" style="margin:0 0 8px">Export a backup file to keep your pins safe. Import takes a backup, a shared folder file, or Google Earth places (.kml or .kmz).</p>
       <div class="inline">
         <button class="btn" id="btnExport">Export pins</button>
         <label class="btn" for="importFile">Import pins</label>
-        <input type="file" id="importFile" accept=".json,application/json" hidden>
+        <input type="file" id="importFile" accept=".json,.kml,.kmz,application/json,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" hidden>
       </div>
     </section>
   </div>

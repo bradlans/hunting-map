@@ -183,7 +183,7 @@
   }
 
   readCache(); buildIndex(); status();
-  map.once('load', () => {
+  window.MHM.onLoad(() => {
     initLayers();
     // Refresh from the DNR at most every 12 hours; HAP enrollment changes a few times a year.
     if (!hap || Date.now() - fetchedAt > 12 * 3600 * 1000) refresh();

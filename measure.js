@@ -1,7 +1,7 @@
 // Michigan Hunting Map - measure tool.
 // Ruler button (top right): tap points on the map for a distance in yards / miles, or
 // switch to Area for acres. Each leg is labeled on the map. Distances are along the
-// ground (great-circle), so they hold at any zoom.
+// ground (great-circle), so they hold at any zoom. Save keeps it as a line or area.
 
 (function () {
   'use strict';
@@ -81,6 +81,7 @@
     $('measureReadout').innerHTML = msg;
     $('btnMeasureUndo').disabled = !pts.length;
     $('btnMeasureClear').disabled = !pts.length;
+    $('btnMeasureSave').disabled = pts.length < (mode === 'area' ? 3 : 2);
     $('measureLine').setAttribute('aria-pressed', mode === 'line');
     $('measureArea').setAttribute('aria-pressed', mode === 'area');
   }
@@ -117,6 +118,8 @@
   $('btnMeasureUndo').addEventListener('click', () => { pts.pop(); draw(); });
   $('btnMeasureClear').addEventListener('click', () => { pts = []; draw(); });
   $('btnMeasureDone').addEventListener('click', stop);
+  // Keep it: name the line or area and put it in a folder (pins.js); measuring ends once saved.
+  $('btnMeasureSave').addEventListener('click', () => window.MHM.pins.saveMeasured(mode === 'area' ? 'area' : 'line', pts.slice(), stop));
   $('measureLine').addEventListener('click', () => { mode = 'line'; draw(); });
   $('measureArea').addEventListener('click', () => { mode = 'area'; draw(); });
   $('btnMeasureMe').addEventListener('click', () => {

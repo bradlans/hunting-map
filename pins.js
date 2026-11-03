@@ -1196,4 +1196,6 @@
 
   // For tests and the console.
   window.MHM.pins = { data, mergeInto, payload, sync, syncShared, openEditor, parseCoords, showPinPopup, sharePayload, packShare, unpackShare, readShare };
+  // GitHub access for other features that use the shared repo (friends.js).
+  window.MHM.github = { ready: syncReady, sharedRepo, gh, pullFile, pushFile, myName, askName, copyText };
 })();

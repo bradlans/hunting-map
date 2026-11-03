@@ -90,6 +90,13 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 .row .lbl { flex: 1; min-width: 0; }
 .row .note { display: block; font-size: 12.5px; color: var(--muted); }
 .row .note.warn { color: var(--blaze); }
+/* Layers tab: the toggles stay one line each (tap the map for the details); only the
+   public land categories keep their short notes. Status lines are small. */
+#tab-layers .row .note { display: none; }
+#tab-layers #landGroups .row .note { display: block; }
+#tab-layers .sec > p.small { font-size: 11px; line-height: 1.35; margin: 2px 0 0; }
+#parcelCounties { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; cursor: pointer; }
+#parcelCounties.open { white-space: normal; }
 .grp { margin: 8px 0 2px; }
 .grp > .row { font-weight: 600; }
 .grp .kids { padding-left: 28px; }
@@ -379,7 +386,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
     <section class="sec">
       <h3>Hunting Access Program</h3>
       <label class="row"><input type="checkbox" id="chkHap" checked><span class="sw" style="background:repeating-linear-gradient(135deg,#d61c8c 0 3px,transparent 3px 7px);border-color:#d61c8c"></span><span class="lbl">HAP land <span class="note">Private land the DNR leases for public hunting. Tap a parcel for rules and check-in.</span></span></label>
-      <label class="row"><input type="checkbox" id="chkHapInactive"><span class="sw" style="background:transparent;border:2px dashed #9a9a9a"></span><span class="lbl">Show inactive parcels <span class="note warn">Former HAP land, not open to hunting</span></span></label>
+      <label class="row"><input type="checkbox" id="chkHapInactive"><span class="sw" style="background:transparent;border:2px dashed #9a9a9a"></span><span class="lbl">Show inactive parcels <span class="warn" style="color:var(--blaze);font-size:12.5px">(not open)</span> <span class="note warn">Former HAP land, not open to hunting</span></span></label>
       <p class="small" id="hapStatus">Loading HAP land...</p>
     </section>
 

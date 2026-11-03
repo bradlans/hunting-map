@@ -31,6 +31,7 @@
     d.types = Array.isArray(d.types) && d.types.length ? d.types : DEFAULT_TYPES.map(t => Object.assign({ updatedAt: 0 }, t));
     d.folders = Array.isArray(d.folders) ? d.folders : [];
     d.pins = Array.isArray(d.pins) ? d.pins : [];
+    d.shapes = Array.isArray(d.shapes) ? d.shapes : []; // lines and areas, kept in folders like pins
     d.deleted = d.deleted && typeof d.deleted === 'object' ? d.deleted : {};
     d.joined = Array.isArray(d.joined) ? d.joined : []; // live shared folders this person is in
     d.sharedMeta = d.sharedMeta && typeof d.sharedMeta === 'object' ? d.sharedMeta : {}; // this device's copy of each one's deletes and members
@@ -47,6 +48,7 @@
       if (typeIds.indexOf(p.type) < 0) p.type = typeIds[0];
       if (folderIds.indexOf(p.folder) < 0) p.folder = UNFILED;
     });
+    (d.shapes || []).forEach(s => { if (folderIds.indexOf(s.folder) < 0) s.folder = UNFILED; });
     return d;
   }
   function save() {
@@ -64,6 +66,7 @@
   const typeById = id => data.types.find(t => t.id === id) || data.types[0];
   const folderById = id => data.folders.find(f => f.id === id) || data.folders[0];
   const pinById = id => data.pins.find(p => p.id === id);
+  const shapeById = id => data.shapes.find(s => s.id === id);
   // A folder is live-shared when it is in the joined list. Its pins live in its own file in
   // the shared repo, not in this person's pins.json.
   const isShared = fid => data.joined.some(j => j.id === fid);
@@ -73,16 +76,20 @@
     if (isShared(p.folder)) p.by = myName(); else delete p.by;
     return p;
   }
-  // A deleted pin is remembered where it lived: the shared folder's file or pins.json.
-  function tombPin(p) {
-    if (isShared(p.folder)) data.sharedMeta[p.folder].deleted['p:' + p.id] = now();
-    else tomb('p', p.id);
+  // A deleted pin (kind 'p') or line/area (kind 's') is remembered where it lived: the
+  // shared folder's file or pins.json.
+  function tombPin(p, kind) {
+    const k = (kind || 'p') + ':' + p.id;
+    if (isShared(p.folder)) data.sharedMeta[p.folder].deleted[k] = now();
+    else data.deleted[k] = now();
   }
-  // One pin id lives in one place; if two copies meet, the newest edit wins.
+  // One id lives in one place; if two copies meet, the newest edit wins.
   function dedupe() {
-    const best = new Map();
-    data.pins.forEach(p => { const c = best.get(p.id); if (!c || (p.updatedAt || 0) > (c.updatedAt || 0)) best.set(p.id, p); });
-    if (best.size !== data.pins.length) data.pins = Array.from(best.values());
+    ['pins', 'shapes'].forEach(list => {
+      const best = new Map();
+      data[list].forEach(p => { const c = best.get(p.id); if (!c || (p.updatedAt || 0) > (c.updatedAt || 0)) best.set(p.id, p); });
+      if (best.size !== data[list].length) data[list] = Array.from(best.values());
+    });
   }
 
   // ---- Merging (sync and import) ------------------------------------------------
@@ -90,6 +97,12 @@
   const validFolder = f => f && f.id && f.name;
   const validPin = p => p && p.id && isFinite(p.lng) && isFinite(p.lat);
   const validJoin = j => j && /^[\w-]{1,40}$/.test(j.id || '');
+  const validShape = s => s && s.id && (s.kind === 'line' || s.kind === 'area') && Array.isArray(s.coords) &&
+    s.coords.length >= (s.kind === 'area' ? 3 : 2) && s.coords.every(c => Array.isArray(c) && isFinite(c[0]) && isFinite(c[1]));
+  // A clean copy of a line/area for saving or sending.
+  const shapeOut = s => ({ id: s.id, kind: s.kind, coords: s.coords.slice(0, 5000).map(c => [+(+c[0]).toFixed(6), +(+c[1]).toFixed(6)]),
+    folder: s.folder, name: String(s.name || '').slice(0, 60), note: String(s.note || '').slice(0, 1000),
+    color: /^#[0-9a-f]{6}$/i.test(s.color || '') ? s.color : '', created: s.created, by: s.by || undefined, updatedAt: s.updatedAt || 0 });
   function mergeInto(target, inc) {
     const tombs = Object.assign({}, target.deleted);
     Object.keys(inc.deleted || {}).forEach(k => { if (!(tombs[k] >= inc.deleted[k])) tombs[k] = inc.deleted[k]; });
@@ -108,6 +121,7 @@
     // Which folders are shown is a per-device choice, so it never comes from another device.
     target.folders = mergeList('f', target.folders, inc.folders, validFolder, cur => ({ visible: cur ? cur.visible !== false : true }));
     target.pins = mergeList('p', target.pins, inc.pins, validPin);
+    target.shapes = mergeList('s', target.shapes || [], (inc.shapes || []).filter(validShape).map(shapeOut), validShape);
     if (target.joined || inc.joined) target.joined = mergeList('j', target.joined || [], inc.joined, validJoin);
     if (inc.me && inc.me.name && (!target.me || (inc.me.updatedAt || 0) > (target.me.updatedAt || 0))) target.me = { name: String(inc.me.name).slice(0, 30), updatedAt: inc.me.updatedAt || 0 };
     const cutoff = now() - 180 * 864e5; // forget deletes after six months
@@ -123,6 +137,7 @@
       types: data.types.map(t => ({ id: t.id, name: t.name, color: t.color, badge: t.badge || '', updatedAt: t.updatedAt || 0 })),
       folders: data.folders.filter(f => !isShared(f.id)).map(f => ({ id: f.id, name: f.name, updatedAt: f.updatedAt || 0 })),
       pins: data.pins.filter(p => !isShared(p.folder)).map(p => ({ id: p.id, lng: p.lng, lat: p.lat, type: p.type, folder: p.folder, name: p.name || '', note: p.note || '', created: p.created, updatedAt: p.updatedAt || 0 })),
+      shapes: data.shapes.filter(s => !isShared(s.folder)).map(s => Object.assign(shapeOut(s), { by: undefined })),
       joined: data.joined.map(j => ({ id: j.id, name: j.name || '', updatedAt: j.updatedAt || 0 })),
       me: data.me,
       deleted: data.deleted,
@@ -159,6 +174,38 @@
     if (map.hasImage(name)) map.updateImage(name, img); else map.addImage(name, img, { pixelRatio: 2 });
   }
 
+  // ---- Lines and areas: sizes ---------------------------------------------------
+  const LINE_COLOR = '#ffb300', AREA_COLOR = '#ff7043';
+  const shapeColor = s => s.color || (s.kind === 'area' ? AREA_COLOR : LINE_COLOR);
+  const rad = d => d * Math.PI / 180;
+  function segMeters(a, b) {
+    const h = Math.sin(rad(b[1] - a[1]) / 2) ** 2 + Math.cos(rad(a[1])) * Math.cos(rad(b[1])) * Math.sin(rad(b[0] - a[0]) / 2) ** 2;
+    return 2 * 6371008.8 * Math.asin(Math.min(1, Math.sqrt(h)));
+  }
+  function pathMeters(c, closed) {
+    let m = 0;
+    for (let i = 1; i < c.length; i++) m += segMeters(c[i - 1], c[i]);
+    return closed && c.length > 2 ? m + segMeters(c[c.length - 1], c[0]) : m;
+  }
+  function sqMeters(c) { // spherical polygon area, same method as the measure tool
+    let s = 0;
+    for (let i = 0; i < c.length; i++) { const a = c[i], b = c[(i + 1) % c.length]; s += rad(b[0] - a[0]) * (2 + Math.sin(rad(a[1])) + Math.sin(rad(b[1]))); }
+    return Math.abs(s * 6371008.8 * 6371008.8 / 2);
+  }
+  const fmtDist = m => (m < 805 ? Math.round(m * 1.0936133) + ' yd' : (m / 1609.344).toFixed(m < 16093 ? 2 : 1) + ' mi');
+  function fmtAcres(m2) {
+    const ac = m2 / 4046.8564;
+    return ac >= 640 ? (ac / 640).toFixed(2) + ' sq mi' : (ac < 10 ? ac.toFixed(2) : ac < 100 ? ac.toFixed(1) : Math.round(ac).toLocaleString()) + ' acres';
+  }
+  const shapeSize = s => (s.kind === 'area' ? fmtAcres(sqMeters(s.coords)) : fmtDist(pathMeters(s.coords)));
+  function shapeCenter(s) {
+    if (s.kind === 'line') return s.coords[Math.floor(s.coords.length / 2)];
+    let x = 0, y = 0;
+    s.coords.forEach(c => { x += c[0]; y += c[1]; });
+    return [x / s.coords.length, y / s.coords.length];
+  }
+  function shapeBounds(s) { const b = new maplibregl.LngLatBounds(); s.coords.forEach(c => b.extend(c)); return b; }
+
   // ---- Map layer ----------------------------------------------------------------
   function renderMap() {
     if (!map.getSource('pins')) return;
@@ -171,10 +218,31 @@
         properties: { id: p.id, type: p.type, name: p.name || '' },
       })),
     });
+    const feats = [];
+    data.shapes.filter(s => shown.indexOf(s.folder) >= 0).forEach(s => {
+      const props = { id: s.id, kind: s.kind, color: shapeColor(s), label: (s.name ? s.name + ' · ' : '') + shapeSize(s) };
+      feats.push({ type: 'Feature', geometry: s.kind === 'area' ? { type: 'Polygon', coordinates: [s.coords.concat([s.coords[0]])] } : { type: 'LineString', coordinates: s.coords }, properties: props });
+      if (s.kind === 'area') feats.push({ type: 'Feature', geometry: { type: 'Point', coordinates: shapeCenter(s) }, properties: Object.assign({ center: true }, props) });
+    });
+    map.getSource('shapes').setData({ type: 'FeatureCollection', features: feats });
   }
   function initMap() {
     mapReady = true;
     data.types.forEach(refreshIcon);
+    // Lines and areas sit under the pins.
+    map.addSource('shapes', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+    const isArea = ['==', ['geometry-type'], 'Polygon'], isLine = ['==', ['geometry-type'], 'LineString'];
+    map.addLayer({ id: 'shapes-fill', type: 'fill', source: 'shapes', filter: isArea, paint: { 'fill-color': ['get', 'color'], 'fill-opacity': 0.22 } });
+    map.addLayer({ id: 'shapes-casing', type: 'line', source: 'shapes', filter: ['any', isArea, isLine],
+      paint: { 'line-color': 'rgba(0,0,0,.55)', 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 2.5, 15, 5.5] } });
+    map.addLayer({ id: 'shapes-line', type: 'line', source: 'shapes', filter: ['any', isArea, isLine],
+      layout: { 'line-join': 'round', 'line-cap': 'round' },
+      paint: { 'line-color': ['get', 'color'], 'line-width': ['interpolate', ['linear'], ['zoom'], 8, 1.2, 15, 3] } });
+    const labelPaint = { 'text-color': '#ffffff', 'text-halo-color': 'rgba(0,0,0,.85)', 'text-halo-width': 1.4 };
+    map.addLayer({ id: 'shapes-label-line', type: 'symbol', source: 'shapes', minzoom: 12, filter: isLine,
+      layout: { 'symbol-placement': 'line', 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Medium'], 'text-size': 12, 'text-max-angle': 40 }, paint: labelPaint });
+    map.addLayer({ id: 'shapes-label-area', type: 'symbol', source: 'shapes', minzoom: 12, filter: ['==', ['get', 'center'], true],
+      layout: { 'text-field': ['get', 'label'], 'text-font': ['Noto Sans Medium'], 'text-size': 12 }, paint: labelPaint });
     map.addSource('pins', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
     map.addLayer({
       id: 'pins', type: 'symbol', source: 'pins',
@@ -324,11 +392,82 @@
     if (!map.getLayer('pins')) return false;
     const pad = 10;
     const hit = map.queryRenderedFeatures([[e.point.x - pad, e.point.y - pad], [e.point.x + pad, e.point.y + 4]], { layers: ['pins'] });
-    if (!hit.length) return false;
-    const p = pinById(hit[0].properties.id);
-    if (p) showPinPopup(p);
-    return !!p;
+    const p = hit.length && pinById(hit[0].properties.id);
+    if (p) { showPinPopup(p); return true; }
+    // A line, or an area's edge or label. A tap inside an area still shows who owns the land.
+    const near = map.queryRenderedFeatures([[e.point.x - 8, e.point.y - 8], [e.point.x + 8, e.point.y + 8]], { layers: ['shapes-line', 'shapes-label-line', 'shapes-label-area'] });
+    const s = near.length && shapeById(near[0].properties.id);
+    if (s) { showShapePopup(s, e.lngLat); return true; }
+    return false;
   };
+
+  // ---- Line / area popup and editor ------------------------------------------------
+  function showShapePopup(s, at) {
+    const f = folderById(s.folder);
+    const el = document.createElement('div');
+    el.className = 'pop';
+    const kind = s.kind === 'area' ? 'Area' : 'Line';
+    const size = s.kind === 'area' ? fmtAcres(sqMeters(s.coords)) + ' · around the edge ' + fmtDist(pathMeters(s.coords, true)) : fmtDist(pathMeters(s.coords));
+    const start = s.kind === 'line' ? s.coords[0] : shapeCenter(s);
+    el.innerHTML =
+      '<h4>' + esc(s.name || kind) + '</h4>' +
+      '<div class="tag"><i style="background:' + esc(shapeColor(s)) + '"></i>' + kind + ' · ' + esc(size) + '</div>' +
+      '<dl><dt>Folder</dt><dd>' + esc(f.name) + (isShared(f.id) ? ' <span class="chip-shared">Shared</span>' : '') + '</dd>' +
+      (isShared(f.id) && s.by ? '<dt>Edited</dt><dd>' + esc(s.by) + ', ' + esc(ago(s.updatedAt)) + '</dd>' : '') + '</dl>' +
+      (s.note ? '<p class="note-text">' + esc(s.note) + '</p>' : '') +
+      '<div class="pin-actions"><button class="btn" data-act="edit">Edit</button>' +
+      '<a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=' + start[1] + ',' + start[0] + '">Directions to ' + (s.kind === 'line' ? 'start' : 'middle') + '</a></div>';
+    el.querySelector('[data-act="edit"]').addEventListener('click', () => { closePopup(); openShapeEditor(s.id); });
+    openPopup(at || (s.kind === 'line' ? s.coords[0] : shapeCenter(s)), el);
+  }
+  let editingShape = null, newShape = null, shapeDeleteArmed = false;
+  // Edit an existing line/area, or name and file a new one (from the measure tool).
+  function openShapeEditor(id, fresh) {
+    editingShape = id ? shapeById(id) : null;
+    newShape = fresh || null;
+    const s = editingShape || newShape;
+    shapeDeleteArmed = false;
+    $('btnShapeDelete').textContent = 'Delete';
+    $('btnShapeDelete').hidden = !editingShape;
+    $('shapeTitle').textContent = (editingShape ? 'Edit ' : 'Save ') + (s.kind === 'area' ? 'area' : 'line');
+    $('shapeSize').textContent = (s.kind === 'area' ? fmtAcres(sqMeters(s.coords)) + ' · around the edge ' + fmtDist(pathMeters(s.coords, true)) : fmtDist(pathMeters(s.coords)));
+    const folderId = editingShape ? s.folder : (data.folders.some(f => f.id === data.last.folder) ? data.last.folder : UNFILED);
+    $('shapeFolder').innerHTML = data.folders.map(f => '<option value="' + esc(f.id) + '"' + (f.id === folderId ? ' selected' : '') + '>' + esc(f.name) + '</option>').join('');
+    $('shapeName').value = s.name || '';
+    $('shapeNote').value = s.note || '';
+    $('shapeColor').value = shapeColor(s);
+    $('shapeWrap').hidden = false;
+    $('shapeName').focus();
+  }
+  function closeShapeEditor() { $('shapeWrap').hidden = true; editingShape = null; newShape = null; }
+  $('shapeForm').addEventListener('submit', e => {
+    e.preventDefault();
+    const fields = { name: $('shapeName').value.trim().slice(0, 60), note: $('shapeNote').value.trim().slice(0, 1000), folder: $('shapeFolder').value, color: $('shapeColor').value };
+    let s = editingShape;
+    if (s) {
+      if (s.folder !== fields.folder && (isShared(s.folder) || isShared(fields.folder))) tombPin(s, 's');
+      Object.assign(s, fields);
+    } else {
+      s = Object.assign({ id: uid('s'), kind: newShape.kind, coords: newShape.coords, created: new Date().toISOString() }, fields);
+      data.shapes.push(s);
+      if (newShape.done) newShape.done();
+    }
+    stampPin(s);
+    data.last.folder = fields.folder;
+    const f = folderById(fields.folder);
+    if (f.visible === false) f.visible = true;
+    toast((editingShape ? 'Saved ' : (s.kind === 'area' ? 'Area' : 'Line') + ' saved to ') + (editingShape ? (s.name || 'it') : f.name));
+    changed(); closeShapeEditor();
+  });
+  $('btnShapeCancel').addEventListener('click', closeShapeEditor);
+  $('shapeWrap').addEventListener('click', e => { if (e.target === $('shapeWrap')) closeShapeEditor(); });
+  $('btnShapeDelete').addEventListener('click', () => {
+    if (!editingShape) return;
+    if (!shapeDeleteArmed) { shapeDeleteArmed = true; $('btnShapeDelete').textContent = 'Tap again to delete'; return; }
+    tombPin(editingShape, 's');
+    data.shapes = data.shapes.filter(x => x !== editingShape);
+    changed(); closeShapeEditor(); toast('Deleted');
+  });
 
   // ---- Placing a pin ----------------------------------------------------------
   let placing = false, movingId = null;
@@ -460,6 +599,7 @@
   document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
     if (!$('shareWrap').hidden) closeShare();
+    else if (!$('shapeWrap').hidden) closeShapeEditor();
     else if (!$('editorWrap').hidden) closeEditor();
     else if (placing) { stopPlacing(); movingId = null; }
   });
@@ -482,6 +622,7 @@
     $('pinCount').textContent = data.pins.length;
     $('folderList').innerHTML = data.folders.map(f => {
       const pins = data.pins.filter(p => p.folder === f.id);
+      const shapes = data.shapes.filter(s => s.folder === f.id);
       const open = !collapsed.has(f.id);
       const shared = isShared(f.id), meta = data.sharedMeta[f.id] || {};
       const id = esc(f.id);
@@ -490,7 +631,7 @@
         '<input type="checkbox" data-fvis="' + id + '"' + (f.visible !== false ? ' checked' : '') + ' aria-label="Show ' + esc(f.name) + ' on the map">' +
         '<span class="name" data-fopen="' + id + '" role="button" tabindex="0" aria-expanded="' + open + '">' + (open ? '▾ ' : '▸ ') + esc(f.name) + '</span>' +
         (shared ? '<span class="chip-shared">Shared</span>' : '') +
-        '<span class="num">' + pins.length + '</span>' +
+        '<span class="num">' + (pins.length + shapes.length) + '</span>' +
         '</div>' +
         (open && shared ?
           '<p class="shared-line' + (meta.error ? ' warn' : '') + '">' +
@@ -507,12 +648,14 @@
           '<button class="btn ghost" data-fren="' + id + '">Rename</button>' +
           '<button class="btn ghost" data-fdel="' + id + '">Delete</button>' +
           '</div>' : '') +
-        (open ? (pins.length
+        (open ? (pins.length || shapes.length
           ? '<ul class="pin-list">' + pins.map(p => {
               const t = typeById(p.type);
               return '<li data-pin="' + esc(p.id) + '"><span class="badge-dot" style="background:' + esc(t.color) + ';color:' + textColorFor(t.color) + '">' + esc((t.badge || '').toUpperCase()) + '</span>' +
                 '<span class="t">' + esc(p.name || t.name) + '<small>' + esc(t.name) + (p.note ? ' · ' + esc(p.note.slice(0, 40)) : '') + '</small></span></li>';
-            }).join('') + '</ul>'
+            }).join('') + shapes.map(s =>
+              '<li data-shape="' + esc(s.id) + '"><span class="shape-ico ' + s.kind + '" style="--c:' + esc(shapeColor(s)) + '" aria-hidden="true"></span>' +
+              '<span class="t">' + esc(s.name || (s.kind === 'area' ? 'Area' : 'Line')) + '<small>' + (s.kind === 'area' ? 'Area · ' : 'Line · ') + esc(shapeSize(s)) + (s.note ? ' · ' + esc(s.note.slice(0, 30)) : '') + '</small></span></li>').join('') + '</ul>'
           : '<p class="empty">No pins yet.</p>') : '') +
         '</div>';
     }).join('');
@@ -524,7 +667,7 @@
     save(); renderMap();
   });
   $('folderList').addEventListener('click', e => {
-    const el = e.target.closest('[data-fopen],[data-fshare],[data-fsync],[data-finvite],[data-fleave],[data-fren],[data-fdel],[data-pin]');
+    const el = e.target.closest('[data-fopen],[data-fshare],[data-fsync],[data-finvite],[data-fleave],[data-fren],[data-fdel],[data-pin],[data-shape]');
     if (!el) return;
     if (el.dataset.fshare) {
       openShareChoice(folderById(el.dataset.fshare));
@@ -546,9 +689,9 @@
       if (name && name.trim()) { f.name = name.trim().slice(0, 40); stamp(f); changed(); }
     } else if (el.dataset.fdel) {
       const f = folderById(el.dataset.fdel);
-      const n = data.pins.filter(p => p.folder === f.id).length;
-      if (!window.confirm('Delete folder "' + f.name + '"?' + (n ? ' Its ' + n + ' pin(s) move to Unfiled.' : ''))) return;
-      data.pins.forEach(p => { if (p.folder === f.id) { p.folder = UNFILED; stamp(p); } });
+      const n = data.pins.filter(p => p.folder === f.id).length + data.shapes.filter(s => s.folder === f.id).length;
+      if (!window.confirm('Delete folder "' + f.name + '"?' + (n ? ' Its ' + n + ' item(s) move to Unfiled.' : ''))) return;
+      data.pins.concat(data.shapes).forEach(p => { if (p.folder === f.id) { p.folder = UNFILED; stamp(p); } });
       tomb('f', f.id);
       data.folders = data.folders.filter(x => x !== f);
       changed();
@@ -560,6 +703,14 @@
       if (narrow()) setPanel(false);
       map.flyTo({ center: [p.lng, p.lat], zoom: Math.max(map.getZoom(), 15) });
       map.once('moveend', () => showPinPopup(p));
+    } else if (el.dataset.shape) {
+      const s = shapeById(el.dataset.shape);
+      if (!s) return;
+      const f = folderById(s.folder);
+      if (f.visible === false) { f.visible = true; save(); renderAll(); }
+      if (narrow()) setPanel(false);
+      map.fitBounds(shapeBounds(s), { padding: 60, maxZoom: 16 });
+      map.once('moveend', () => showShapePopup(s));
     }
   });
   $('folderList').addEventListener('keydown', e => {
@@ -657,6 +808,7 @@
       folder: { id: f.id, name: f.name, updatedAt: f.updatedAt || 0 },
       types: data.types.filter(t => used.has(t.id)).map(t => ({ id: t.id, name: t.name, color: t.color, badge: t.badge || '', updatedAt: t.updatedAt || 0 })),
       pins: pins.map(p => ({ id: p.id, lng: p.lng, lat: p.lat, type: p.type, name: p.name || '', note: p.note || '', created: p.created, updatedAt: p.updatedAt || 0 })),
+      shapes: data.shapes.filter(s => s.folder === f.id).map(s => Object.assign(shapeOut(s), { folder: undefined, by: undefined })),
     };
   }
   // Cleans up a share from a link or file; returns null if it isn't one.
@@ -670,25 +822,26 @@
       id: str(p.id, 40), lng: +p.lng, lat: +p.lat, type: str(p.type, 40), folder: folder.id, name: str(p.name, 60), note: str(p.note, 1000),
       created: p.created ? str(p.created, 30) : undefined, updatedAt: +p.updatedAt || 0,
     })).filter(p => Math.abs(p.lat) <= 90 && Math.abs(p.lng) <= 180);
-    return { folder, types, pins, at: +s.at || 0 };
+    const shapes = (Array.isArray(s.shapes) ? s.shapes : []).slice(0, 2000).filter(validShape).map(x => Object.assign(shapeOut(x), { id: str(x.id, 40), folder: folder.id, by: undefined }));
+    return { folder, types, pins, shapes, at: +s.at || 0 };
   }
   function addShare(sh) {
     const tombs = data.deleted;
     // Adding a share on purpose brings back a folder or type this device deleted earlier.
     const revive = (kind, x) => (tombs[kind + ':' + x.id] >= x.updatedAt ? Object.assign({}, x, { updatedAt: now() }) : x);
     const types = sh.types.filter(t => !data.types.some(x => x.id === t.id)).map(t => revive('t', t));
-    mergeInto(data, { types, folders: [revive('f', sh.folder)], pins: sh.pins, deleted: {} });
-    // Pins left in Unfiled when this folder was deleted here go back into it.
+    mergeInto(data, { types, folders: [revive('f', sh.folder)], pins: sh.pins, shapes: sh.shapes || [], deleted: {} });
+    // Pins and lines left in Unfiled when this folder was deleted here go back into it.
     sh.pins.forEach(p => { const cur = pinById(p.id); if (cur && cur.folder === UNFILED) { cur.folder = sh.folder.id; stamp(cur); } });
+    (sh.shapes || []).forEach(x => { const cur = shapeById(x.id); if (cur && cur.folder === UNFILED) { cur.folder = sh.folder.id; stamp(cur); } });
     data.types.forEach(t => { if (!map.hasImage('pin-' + t.id)) refreshIcon(t); });
     folderById(sh.folder.id).visible = true;
     collapsed.delete(sh.folder.id);
     changed();
-    if (sh.pins.length) {
-      const b = new maplibregl.LngLatBounds();
-      sh.pins.forEach(p => b.extend([p.lng, p.lat]));
-      map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 0 });
-    }
+    const b = new maplibregl.LngLatBounds();
+    sh.pins.forEach(p => b.extend([p.lng, p.lat]));
+    (sh.shapes || []).forEach(x => x.coords.forEach(c => b.extend(c)));
+    if (!b.isEmpty()) map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 0 });
   }
 
   function openShareModal(title, text, warn, buttons) {
@@ -711,12 +864,12 @@
 
   async function openShareOut(f) {
     const payloadOut = sharePayload(f);
-    const n = payloadOut.pins.length;
-    if (!n) { toast('"' + f.name + '" has no pins to share yet.'); return; }
+    const n = payloadOut.pins.length, ns = payloadOut.shapes.length;
+    if (!n && !ns) { toast('"' + f.name + '" has nothing to share yet.'); return; }
     let url;
     try { url = location.origin + location.pathname + '#share=' + await packShare(payloadOut); }
     catch (e) { console.error(e); toast('Could not make a share link in this browser. Use "Save as file" instead.'); }
-    const label = n + ' pin' + (n === 1 ? '' : 's');
+    const label = [n ? n + ' pin' + (n === 1 ? '' : 's') : '', ns ? ns + ' line' + (ns === 1 ? '' : 's') + '/area' + (ns === 1 ? '' : 's') : ''].filter(Boolean).join(' and ');
     const buttons = [];
     if (url && navigator.share) buttons.push({ label: 'Send link', primary: true, run: () => {
       navigator.share({ title: f.name + ' (hunting pins)', text: 'Hunting pins: ' + f.name + ' (' + label + '). Open the link to add them to your map.', url })
@@ -745,12 +898,15 @@
   function offerShare(sh) {
     const f = folderById(sh.folder.id), have = f && f.id === sh.folder.id;
     let added = 0, updated = 0;
-    sh.pins.forEach(p => {
-      const cur = pinById(p.id);
-      if (!cur) { if (!(data.deleted['p:' + p.id] >= p.updatedAt)) added++; }
+    const count = (list, find, kind) => list.forEach(p => {
+      const cur = find(p.id);
+      if (!cur) { if (!(data.deleted[kind + ':' + p.id] >= p.updatedAt)) added++; }
       else if (p.updatedAt > (cur.updatedAt || 0)) updated++;
     });
-    const n = sh.pins.length, label = n + ' pin' + (n === 1 ? '' : 's');
+    count(sh.pins, pinById, 'p');
+    count(sh.shapes || [], shapeById, 's');
+    const ns = (sh.shapes || []).length;
+    const n = sh.pins.length, label = n + ' pin' + (n === 1 ? '' : 's') + (ns ? ' and ' + ns + ' line' + (ns === 1 ? '' : 's') + '/area' + (ns === 1 ? '' : 's') : '');
     const when = sh.at ? ' Shared ' + new Date(sh.at).toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' }) + '.' : '';
     let text;
     if (!have) text = 'Someone shared a folder of ' + label + ' with you.' + when + ' Add it to your map as the folder "' + sh.folder.name + '"?';
@@ -843,25 +999,58 @@
     if (e.method !== 8 || !window.DecompressionStream) throw new Error('unsupported zip');
     return new TextDecoder().decode(await squeeze(raw, DecompressionStream));
   }
-  // Placemark points become pins; their Google Earth folder becomes the pin folder.
+  // Placemark points become pins, LineStrings become lines and Polygons (outer edge) become
+  // areas; their Google Earth folder becomes the folder, and a line/area keeps its color.
   function readKml(text, fileName) {
     const doc = new DOMParser().parseFromString(text, 'application/xml');
     if (doc.getElementsByTagName('parsererror').length) throw new Error('bad KML');
     const child = (el, tag) => { const c = el && Array.from(el.children).find(x => x.localName === tag); return c ? c.textContent.trim() : ''; };
+    const all = (el, tag) => Array.from(el.getElementsByTagNameNS('*', tag));
     const plain = html => (/[<&]/.test(html) ? new DOMParser().parseFromString(html, 'text/html').body.textContent : html).replace(/\s+\n/g, '\n').trim();
-    const docEl = doc.getElementsByTagNameNS('*', 'Document')[0];
+    const okPt = c => c.length >= 2 && Math.abs(c[1]) <= 90 && Math.abs(c[0]) <= 180 && (c[0] || c[1]);
+    const coordList = s => (s || '').trim().split(/\s+/).map(t => t.split(',').map(Number)).filter(okPt).map(c => [+c[0].toFixed(6), +c[1].toFixed(6)]);
+    // Long tracks are thinned to 2000 points, plenty for a route on this map.
+    const thin = c => { if (c.length <= 2000) return c; const step = Math.ceil(c.length / 2000); return c.filter((x, i) => i % step === 0 || i === c.length - 1); };
+    // Colors: an inline Style, or a shared Style / StyleMap (its "normal" style) by styleUrl. KML colors are aabbggrr.
+    const styles = {}, styleMaps = {};
+    all(doc, 'Style').forEach(st => { if (st.getAttribute('id')) styles[st.getAttribute('id')] = st; });
+    all(doc, 'StyleMap').forEach(sm => {
+      const pair = all(sm, 'Pair').find(p => child(p, 'key') === 'normal');
+      if (sm.getAttribute('id') && pair) styleMaps[sm.getAttribute('id')] = child(pair, 'styleUrl').split('#').pop();
+    });
+    function colorOf(pm, kind) {
+      let st = Array.from(pm.children).find(c => c.localName === 'Style');
+      if (!st) { let id = child(pm, 'styleUrl').split('#').pop(); id = styleMaps[id] || id; st = styles[id]; }
+      const el = st && (st.getElementsByTagNameNS('*', kind === 'area' ? 'PolyStyle' : 'LineStyle')[0] || st.getElementsByTagNameNS('*', 'LineStyle')[0]);
+      const c = el ? child(el, 'color') : '';
+      return /^[0-9a-f]{8}$/i.test(c) ? '#' + c.slice(6, 8) + c.slice(4, 6) + c.slice(2, 4) : '';
+    }
+    const docEl = all(doc, 'Document')[0];
     const fallback = (child(docEl, 'name') || fileName.replace(/\.(kml|kmz)$/i, '')).slice(0, 40) || 'Imported';
-    const pins = [];
-    let shapes = 0;
-    Array.from(doc.getElementsByTagNameNS('*', 'Placemark')).forEach(pm => {
-      const pt = pm.getElementsByTagNameNS('*', 'Point')[0];
-      const c = pt && (child(pt, 'coordinates') || '').split(/\s+/)[0].split(',').map(Number);
-      if (!c || !(Math.abs(c[1]) <= 90 && Math.abs(c[0]) <= 180) || (!c[0] && !c[1])) { shapes++; return; } // lines, shapes, empty points
+    const pins = [], shapes = [];
+    let skipped = 0;
+    all(doc, 'Placemark').forEach(pm => {
       let folder = '';
       for (let n = pm.parentElement; n && !folder; n = n.parentElement) if (n.localName === 'Folder') folder = child(n, 'name');
-      pins.push({ lng: +c[0].toFixed(6), lat: +c[1].toFixed(6), name: child(pm, 'name').slice(0, 60), note: plain(child(pm, 'description')).slice(0, 1000), folder: (folder || fallback).slice(0, 40) });
+      const base = { name: child(pm, 'name').slice(0, 60), note: plain(child(pm, 'description')).slice(0, 1000), folder: (folder || fallback).slice(0, 40) };
+      const pt = all(pm, 'Point')[0];
+      const c = pt && coordList(child(pt, 'coordinates'))[0];
+      if (c) { pins.push(Object.assign({ lng: c[0], lat: c[1] }, base)); return; }
+      let found = false;
+      all(pm, 'LineString').forEach(ls => {
+        const cs = thin(coordList(child(ls, 'coordinates')));
+        if (cs.length >= 2) { shapes.push(Object.assign({ kind: 'line', coords: cs, color: colorOf(pm, 'line') }, base)); found = true; }
+      });
+      all(pm, 'Polygon').forEach(pg => {
+        const ring = all(pg, 'outerBoundaryIs')[0];
+        let cs = ring ? coordList((all(ring, 'coordinates')[0] || {}).textContent) : [];
+        if (cs.length > 3 && cs[0][0] === cs[cs.length - 1][0] && cs[0][1] === cs[cs.length - 1][1]) cs = cs.slice(0, -1); // drop the closing repeat
+        cs = thin(cs);
+        if (cs.length >= 3) { shapes.push(Object.assign({ kind: 'area', coords: cs, color: colorOf(pm, 'area') }, base)); found = true; }
+      });
+      if (!found) skipped++; // tracks, 3D models, empty placemarks
     });
-    return { pins, shapes };
+    return { pins, shapes, skipped };
   }
   // Pick a pin type from the name/notes; anything unclear gets an "Imported" type.
   const TYPE_WORDS = [['scrape', /scrape/i], ['rub', /\brubs?\b|rub line/i], ['cam', /cam(era)?\b|trail ?cam/i], ['stand', /stand|blind|ladder|ground ?blind|\bsaddle\b/i],
@@ -876,38 +1065,57 @@
   function offerKml(text, fileName) {
     let got;
     try { got = readKml(text, fileName); } catch (err) { console.error(err); toast('That Google Earth file could not be read.'); return; }
-    // Skip places already on the map (same name within about 2 m), so importing twice is safe.
+    // Skip what's already on the map (same name and spot), so importing twice is safe.
     const dupe = p => data.pins.some(q => (q.name || '') === p.name && meters(q, p) < 2);
+    const near = (a, b) => meters({ lng: a[0], lat: a[1] }, { lng: b[0], lat: b[1] }) < 2;
+    const dupeShape = s => data.shapes.some(q => q.kind === s.kind && (q.name || '') === s.name && q.coords.length === s.coords.length && near(q.coords[0], s.coords[0]));
     const fresh = got.pins.filter(p => !dupe(p)).slice(0, 5000);
-    if (!fresh.length) {
-      toast(got.pins.length ? 'Those places are already on your map.' : 'No places (points) in that file' + (got.shapes ? '; it only has lines or shapes.' : '.'));
+    const freshShapes = got.shapes.filter(s => !dupeShape(s)).slice(0, 2000);
+    if (!fresh.length && !freshShapes.length) {
+      toast(got.pins.length || got.shapes.length ? 'Everything in that file is already on your map.' : 'Nothing in that file can be shown on this map (no points, lines or shapes).');
       return;
     }
     const byFolder = {};
-    fresh.forEach(p => { byFolder[p.folder] = (byFolder[p.folder] || 0) + 1; });
+    fresh.concat(freshShapes).forEach(p => { byFolder[p.folder] = (byFolder[p.folder] || 0) + 1; });
     const list = Object.keys(byFolder).map(f => f + ' (' + byFolder[f] + ')').join(', ');
-    const skipped = got.pins.length - fresh.length;
+    const nL = freshShapes.filter(s => s.kind === 'line').length, nA = freshShapes.length - nL;
+    const plural = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+    const what = [fresh.length ? plural(fresh.length, 'place') : '', nL ? plural(nL, 'line') : '', nA ? plural(nA, 'area') : ''].filter(Boolean).join(', ');
+    const skipped = (got.pins.length - fresh.length) + (got.shapes.length - freshShapes.length);
     if (narrow()) setPanel(false);
     openShareModal('Import from Google Earth',
-      fresh.length + ' place' + (fresh.length === 1 ? '' : 's') + ' from ' + fileName + ' into ' + list + '. Folders that don\'t exist yet are made for you, and each pin gets a type from its name (or "Imported").',
-      [skipped ? skipped + ' already on your map, skipped.' : '', got.shapes ? got.shapes + ' line' + (got.shapes === 1 ? '' : 's') + '/shape' + (got.shapes === 1 ? '' : 's') + ' skipped (only points become pins).' : ''].filter(Boolean).join(' '),
-      [{ label: 'Import', primary: true, run: () => { closeShare(); importKml(fresh); } }, { label: 'Cancel', run: closeShare }]);
+      what + ' from ' + fileName + ' into ' + list + '. Folders that don\'t exist yet are made for you' + (fresh.length ? ', and each pin gets a type from its name (or "Imported")' : '') + '.',
+      [skipped ? skipped + ' already on your map, skipped.' : '', got.skipped ? plural(got.skipped, 'item') + ' this map can\'t show (like tracks or 3D models) skipped.' : ''].filter(Boolean).join(' '),
+      [{ label: 'Import', primary: true, run: () => { closeShare(); importKml(fresh, freshShapes); } }, { label: 'Cancel', run: closeShare }]);
   }
-  function importKml(list) {
+  function importKml(list, shapes) {
     const folderFor = {};
-    list.forEach(p => {
-      if (!folderFor[p.folder]) {
-        const have = data.folders.find(f => f.name.toLowerCase() === p.folder.toLowerCase());
-        folderFor[p.folder] = have || addFolder(p.folder);
-        folderFor[p.folder].visible = true;
+    const folderOf = name => {
+      if (!folderFor[name]) {
+        const have = data.folders.find(f => f.name.toLowerCase() === name.toLowerCase());
+        folderFor[name] = have || addFolder(name);
+        folderFor[name].visible = true;
       }
-      data.pins.push(stampPin({ id: uid('p'), lng: p.lng, lat: p.lat, type: guessType(p), folder: folderFor[p.folder].id, name: p.name, note: p.note, created: new Date().toISOString() }));
+      return folderFor[name].id;
+    };
+    const when = new Date().toISOString();
+    list.forEach(p => {
+      data.pins.push(stampPin({ id: uid('p'), lng: p.lng, lat: p.lat, type: guessType(p), folder: folderOf(p.folder), name: p.name, note: p.note, created: when }));
+    });
+    (shapes || []).forEach(s => {
+      data.shapes.push(stampPin({ id: uid('s'), kind: s.kind, coords: s.coords, folder: folderOf(s.folder), name: s.name, note: s.note, color: s.color, created: when }));
     });
     changed();
     const b = new maplibregl.LngLatBounds();
     list.forEach(p => b.extend([p.lng, p.lat]));
+    (shapes || []).forEach(s => s.coords.forEach(c => b.extend(c)));
     map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 0 });
-    toast('Imported ' + list.length + ' pin' + (list.length === 1 ? '' : 's') + ' from Google Earth.');
+    const n = list.length + (shapes || []).length;
+    toast('Imported ' + n + ' item' + (n === 1 ? '' : 's') + ' from Google Earth.');
+  }
+  // From the measure tool's Save button: name and file the line or area just measured.
+  function saveMeasured(kind, coords, done) {
+    openShapeEditor(null, { kind, coords: coords.map(c => [+(+c[0]).toFixed(6), +(+c[1]).toFixed(6)]), done });
   }
   const meters = (a, b) => {
     const r = d => d * Math.PI / 180, h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2;
@@ -991,17 +1199,18 @@
     }
     throw new SyncError('Someone else kept saving at the same moment. Try again.');
   }
-  const canonical = o => JSON.stringify({ types: o.types, folders: o.folders, pins: o.pins, deleted: o.deleted, joined: o.joined || [], me: o.me || null });
+  const canonical = o => JSON.stringify({ types: o.types, folders: o.folders, pins: o.pins, shapes: o.shapes || [], deleted: o.deleted, joined: o.joined || [], me: o.me || null });
 
   // This person's pins.json covers everything except shared folders, which are left alone.
   function mergePersonal(inc) {
     const shared = new Set(data.joined.map(j => j.id));
     const mine = x => !shared.has(x);
-    const view = { types: data.types, folders: data.folders.filter(f => mine(f.id)), pins: data.pins.filter(p => mine(p.folder)), deleted: data.deleted, joined: data.joined, me: data.me };
-    mergeInto(view, Object.assign({}, inc, { folders: (inc.folders || []).filter(f => f && mine(f.id)), pins: (inc.pins || []).filter(p => p && mine(p.folder)) }));
+    const view = { types: data.types, folders: data.folders.filter(f => mine(f.id)), pins: data.pins.filter(p => mine(p.folder)), shapes: data.shapes.filter(s => mine(s.folder)), deleted: data.deleted, joined: data.joined, me: data.me };
+    mergeInto(view, Object.assign({}, inc, { folders: (inc.folders || []).filter(f => f && mine(f.id)), pins: (inc.pins || []).filter(p => p && mine(p.folder)), shapes: (inc.shapes || []).filter(s => s && mine(s.folder)) }));
     data.types = view.types; data.deleted = view.deleted; data.joined = view.joined; data.me = view.me;
     data.folders = view.folders.concat(data.folders.filter(f => !mine(f.id)));
     data.pins = view.pins.concat(data.pins.filter(p => !mine(p.folder)));
+    data.shapes = view.shapes.concat(data.shapes.filter(s => !mine(s.folder)));
     reconcileJoined();
   }
   // Match folders on this device to the joined list (joined or left on another device).
@@ -1015,6 +1224,7 @@
       if (ids.has(id)) return;
       data.folders = data.folders.filter(f => f.id !== id);
       data.pins = data.pins.filter(p => p.folder !== id);
+      data.shapes = data.shapes.filter(s => s.folder !== id);
       delete data.sharedMeta[id];
     });
     dedupe();
@@ -1105,7 +1315,9 @@
   const SHARED_APP = 'mhm-shared-folder';
   const sortKeys = o => Object.keys(o || {}).sort().map(k => [k, o[k]]);
   const pinRow = p => [p.id, p.lng, p.lat, p.type, p.name || '', p.note || '', p.created || '', p.by || '', p.updatedAt || 0];
-  const canonShared = o => JSON.stringify([o.folder ? [o.folder.name, o.folder.updatedAt || 0] : null, (o.pins || []).map(pinRow).sort(), sortKeys(o.deleted), sortKeys(o.members)]);
+  const shapeRow = s => [s.id, s.kind, JSON.stringify(s.coords), s.name || '', s.note || '', s.color || '', s.by || '', s.updatedAt || 0];
+  const canonShared = o => JSON.stringify([o.folder ? [o.folder.name, o.folder.updatedAt || 0] : null, (o.pins || []).map(pinRow).sort(),
+    (o.shapes || []).map(shapeRow).sort(), sortKeys(o.deleted), sortKeys(o.members)]);
 
   function sharedPayload(id) {
     const f = data.folders.find(x => x.id === id), meta = data.sharedMeta[id];
@@ -1116,6 +1328,7 @@
       folder: { id, name: f.name, updatedAt: f.updatedAt || 0 },
       types: data.types.filter(t => used.has(t.id)).map(t => ({ id: t.id, name: t.name, color: t.color, badge: t.badge || '' })),
       pins: pins.map(p => ({ id: p.id, lng: p.lng, lat: p.lat, type: p.type, name: p.name || '', note: p.note || '', created: p.created, by: p.by || '', updatedAt: p.updatedAt || 0 })),
+      shapes: data.shapes.filter(s => s.folder === id).map(s => Object.assign(shapeOut(s), { folder: undefined, by: s.by || '' })),
       deleted: meta.deleted, members: meta.members,
     };
   }
@@ -1129,7 +1342,7 @@
       const nt = { id: str(t.id, 40), name: str(t.name, 30), color: t.color, badge: str(t.badge, 2), updatedAt: 0 };
       data.types.push(nt); refreshIcon(nt);
     });
-    const view = { types: data.types, folders: [local], pins: data.pins.filter(p => p.folder === id), deleted: meta.deleted };
+    const view = { types: data.types, folders: [local], pins: data.pins.filter(p => p.folder === id), shapes: data.shapes.filter(x => x.folder === id), deleted: meta.deleted };
     mergeInto(view, {
       types: [],
       folders: s.folder && s.folder.name ? [{ id, name: str(s.folder.name, 40), updatedAt: +s.folder.updatedAt || 0 }] : [],
@@ -1137,11 +1350,13 @@
         id: str(p.id, 40), lng: +p.lng, lat: +p.lat, type: str(p.type, 40), folder: id, name: str(p.name, 60), note: str(p.note, 1000),
         created: p.created ? str(p.created, 30) : undefined, by: str(p.by, 30), updatedAt: +p.updatedAt || 0,
       })),
+      shapes: (Array.isArray(s.shapes) ? s.shapes : []).filter(validShape).map(x => Object.assign(shapeOut(x), { id: str(x.id, 40), folder: id, by: str(x.by, 30) })),
       deleted: s.deleted && typeof s.deleted === 'object' ? s.deleted : {},
     });
     const mf = view.folders.find(x => x.id === id);
     if (mf) { local.name = mf.name; local.updatedAt = mf.updatedAt; }
     data.pins = data.pins.filter(p => p.folder !== id).concat(view.pins.filter(p => p.folder === id));
+    data.shapes = data.shapes.filter(x => x.folder !== id).concat(view.shapes.filter(x => x.folder === id));
     meta.deleted = view.deleted;
     Object.keys(s.members || {}).forEach(n => { const t = +s.members[n] || 0; if (n && !(meta.members[n] >= t)) meta.members[str(n, 30)] = t; });
     dedupe();
@@ -1201,7 +1416,7 @@
     if (!askName()) return;
     data.joined.push({ id: f.id, name: f.name, updatedAt: now() });
     data.sharedMeta[f.id] = { deleted: {}, members: { [myName()]: now() }, pending: true };
-    data.pins.forEach(p => { if (p.folder === f.id && !p.by) p.by = myName(); });
+    data.pins.concat(data.shapes).forEach(p => { if (p.folder === f.id && !p.by) p.by = myName(); });
     save(); renderAll();
     toast('Sharing "' + f.name + '"...');
     try {
@@ -1259,12 +1474,10 @@
           f.visible = true; collapsed.delete(id);
           mergeShared(id, s);
           closeShare(); changed(); scheduleSync(1000);
-          const pins = data.pins.filter(p => p.folder === id);
-          if (pins.length) {
-            const b = new maplibregl.LngLatBounds();
-            pins.forEach(p => b.extend([p.lng, p.lat]));
-            map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 0 });
-          }
+          const b = new maplibregl.LngLatBounds();
+          data.pins.forEach(p => { if (p.folder === id) b.extend([p.lng, p.lat]); });
+          data.shapes.forEach(x => { if (x.folder === id) x.coords.forEach(c => b.extend(c)); });
+          if (!b.isEmpty()) map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 0 });
           toast('Joined "' + f.name + '"');
         } },
         { label: 'No thanks', run: closeShare },
@@ -1277,6 +1490,7 @@
     data.joined = data.joined.filter(j => j.id !== id);
     data.folders = data.folders.filter(x => x.id !== id);
     data.pins = data.pins.filter(p => p.folder !== id);
+    data.shapes = data.shapes.filter(s => s.folder !== id);
     delete data.sharedMeta[id];
     changed();
     toast('Left "' + f.name + '"');
@@ -1294,7 +1508,7 @@
   }
 
   // For tests and the console.
-  window.MHM.pins = { data, mergeInto, payload, sync, syncShared, openEditor, parseCoords, showPinPopup, sharePayload, packShare, unpackShare, readShare };
+  window.MHM.pins = { data, mergeInto, payload, sync, syncShared, openEditor, parseCoords, showPinPopup, sharePayload, packShare, unpackShare, readShare, saveMeasured, showShapePopup };
   // GitHub access for other features that use the shared repo (friends.js).
   window.MHM.github = { ready: syncReady, sharedRepo, gh, pullFile, pushFile, myName, askName, copyText };
 })();

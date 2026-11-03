@@ -33,7 +33,7 @@ Using it
                  the blue cone shows which way the phone is pointing (compass)
   Ruler button - (under GPS) measure: tap points for distance in yards / miles, each
                  leg labeled; switch to Area for acres. "From me" starts at your GPS
-                 spot. Undo, Clear, Done.
+                 spot. Undo, Clear, Save (keep it as a line or area in a folder), Done.
 
 Pins
   Double-click (computer) or press and hold (phone) the map to drop a pin right there.
@@ -44,6 +44,11 @@ Pins
                  crosshair jumps there; reads 44.24, -85.45 / 44 14 24 N 85 27 0 W /
                  N44 14.4 W85 27.0 / Google Maps links
   Pins tab     - folders with show/hide checkboxes, share, rename, delete; tap a pin to go to it
+  Lines/areas  - routes and outlines kept in folders like pins, with their length or acres
+                 on the map. Make one with the ruler (measure, then Save), or import them
+                 from Google Earth. Tap a line, or an area's edge or label, for its popup
+                 and Edit (name, folder, color, notes, delete). A tap inside an area still
+                 shows who owns the land. They sync, share and back up like pins.
   Pin types    - edit the list of pin types (name, color, 1-2 letter badge)
 
 Sharing a folder
@@ -106,11 +111,12 @@ Sync between devices
 
 Importing from Google Earth
   Pins tab > Backup > Import pins, then pick a .kml or .kmz (in Google Earth: right-click
-  a folder or place > Save Place As). Every placemark point becomes a pin: its name and
-  description come along, its Google Earth folder becomes the pin folder (made if it
-  doesn't exist), and the type is picked from the name (scrape, rub, stand/blind, trail
-  cam, bedding, parking, deer sighting), or "Imported" if unclear. Lines and shapes are
-  skipped. Places already on the map (same name, same spot) are skipped, so importing
+  a folder or place > Save Place As). Points become pins, paths become lines and
+  polygons become areas (keeping their Google Earth color). Names and descriptions come
+  along, the Google Earth folder becomes the folder (made if it doesn't exist), and a
+  pin's type is picked from its name (scrape, rub, stand/blind, trail cam, bedding,
+  parking, deer sighting), or "Imported" if unclear. GPS tracks and 3D models are
+  skipped. Anything already on the map (same name, same spot) is skipped, so importing
   the same file twice is safe.
 
 Wind arrows point DOWNWIND (the way scent drifts). Labels give the direction the wind

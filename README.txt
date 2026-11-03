@@ -11,6 +11,7 @@ Open it
   to get the GPS dot.
 
 Using it
+  Layers and Pins button (top) opens the panel:
   Layers tab   - base map, contours, wind, and public land categories
   Hunting only - shows just state forest, state game areas, state parks,
                  national forest and BLM land
@@ -31,6 +32,12 @@ Using it
   Wind button  - refresh wind now
   GPS button   - (top right) shows where you are and whether you're on public land;
                  the blue cone shows which way the phone is pointing (compass)
+  Map route    - (top) records your walk with GPS as a red line. The button shows the
+                 distance while recording; Pause/Resume, Save (name it and pick a folder;
+                 it becomes a line like any other), Discard, Hide. Rough GPS fixes and
+                 standing-still wander are left out. The screen stays on while recording
+                 (phones stop GPS for web pages when the screen sleeps). A route in
+                 progress survives closing the page; it comes back paused.
   Ruler button - (under GPS) measure: tap points for distance in yards / miles, each
                  leg labeled; switch to Area for acres. "From me" starts at your GPS
                  spot. Undo, Clear, Save (keep it as a line or area in a folder), Done.
@@ -135,4 +142,5 @@ Files
   compass.js              view cone on the location dot
   measure.js              measure tool (distance and area)
   friends.js              friend location sharing
+  route.js                Map route (record a GPS track as a line)
   data/public_land.js     public land (USGS PAD-US 4.1, Michigan, simplified)

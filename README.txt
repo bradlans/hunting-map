@@ -31,6 +31,9 @@ Using it
   Wind button  - refresh wind now
   GPS button   - (top right) shows where you are and whether you're on public land;
                  the blue cone shows which way the phone is pointing (compass)
+  Ruler button - (under GPS) measure: tap points for distance in yards / miles, each
+                 leg labeled; switch to Area for acres. "From me" starts at your GPS
+                 spot. Undo, Clear, Done.
 
 Pins
   Double-click (computer) or press and hold (phone) the map to drop a pin right there.
@@ -90,4 +93,5 @@ Files
   cf.js                   Commercial Forest layer (Michigan DNR open data)
   parcels.js              county parcel lines (each county's free public GIS service)
   compass.js              view cone on the location dot
+  measure.js              measure tool (distance and area)
   data/public_land.js     public land (USGS PAD-US 4.1, Michigan, simplified)

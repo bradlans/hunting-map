@@ -466,9 +466,10 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
       <span>then it turns off by itself</span>
     </div>
     <div class="share-with"><span class="small">Share with</span><div id="shareWith"></div></div>
+    <label class="share-for" id="awakeRow"><input type="checkbox" id="chkAwake" style="width:16px;height:16px;accent-color:var(--blaze);margin:0"> Keep my screen on while sharing (best tracking, uses more battery)</label>
     <p class="small" id="shareStatus" aria-live="polite" style="margin:4px 0 0"></p>
     <ul class="friend-list" id="friendList"></ul>
-    <p class="small" style="margin:0 0 8px">Your spot updates about once a minute while the map is open on your screen. Phones pause it when the screen is off, so a friend's dot shows when they were last seen. Never use it to decide if a shot is safe.</p>
+    <p class="small" style="margin:0 0 8px">Your spot updates every 15 seconds while you're moving (every 2 minutes sitting still) while the map is open on your screen. Phones pause it when the screen is off, so a friend's dot shows when they were last seen. Never use it to decide if a shot is safe.</p>
     <div class="actions"><button class="btn" type="button" id="btnFriendsRefresh">Refresh</button><button class="btn primary" type="button" id="btnFriendsClose">Close</button></div>
   </div>
 </div>

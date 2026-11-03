@@ -1,8 +1,12 @@
 // Michigan Hunting Map - friend locations.
 // "Share my location" (Friends button) writes your spot to locations/<name>.json in the
 // shared repo about once a minute, for a set time; turning it off deletes the file.
-// Everyone in the shared repo sees each other's latest spot as a labeled dot.
+// Each spot lists who it is for ("Share with"); the map only shows a friend's dot to the
+// people they picked. Everyone who opens Friends adds their name to people/<name>.json so
+// they show up in each other's Share with list.
 // A web page only gets GPS while it is open on screen, so a dot is "last seen", not live.
+// Note the picking is done by the map: anyone who can open the shared repo itself on
+// GitHub could still read every spot.
 
 (function () {
   'use strict';
@@ -18,11 +22,16 @@
   function saveSt() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* storage blocked */ } }
   let watchId = null, myPos = null, sentPos = null, sentAt = 0, sendTimer = null, pollTimer = null, sending = false;
   let friends = []; // [{ name, lng, lat, acc, at, until }]
+  let people = []; // [{ id, name }] everyone else in the shared group, for "Share with"
   const shas = {}; // path -> sha, so unchanged friend files aren't fetched again
 
   const sharing = () => !!(st.until && st.until > Date.now());
   const slug = n => String(n).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'me';
   const myFile = () => 'locations/' + slug(GH.myName()) + '.json';
+  // Who gets to see me. People who show up after you last chose start unchecked.
+  st.to = Array.isArray(st.to) ? st.to : null;
+  st.known = Array.isArray(st.known) ? st.known : [];
+  const shareTo = () => people.filter(p => st.to ? st.to.includes(p.id) : true);
 
   // ---- Distances --------------------------------------------------------------------------
   const rad = d => d * Math.PI / 180;
@@ -55,7 +64,7 @@
     const moved = !sentPos || meters(sentPos, myPos) >= MIN_MOVE;
     if (!force && !moved && Date.now() - sentAt < 5 * SEND_EVERY) return; // standing still: check in every 5 min
     sending = true;
-    const body = { app: APP, v: 1, name: GH.myName(), lng: +myPos[0].toFixed(6), lat: +myPos[1].toFixed(6), acc: Math.round(st.acc || 0), at: Date.now(), until: st.until };
+    const body = { app: APP, v: 2, name: GH.myName(), lng: +myPos[0].toFixed(6), lat: +myPos[1].toFixed(6), acc: Math.round(st.acc || 0), at: Date.now(), until: st.until, to: shareTo().map(p => p.id) };
     try {
       let cur = await GH.pullFile(GH.sharedRepo(), myFile());
       if (!(await GH.pushFile(GH.sharedRepo(), myFile(), body, cur && cur.sha, 'Location: ' + body.name))) {
@@ -102,6 +111,7 @@
     if (!navigator.geolocation) { toast('This browser has no GPS access.'); render(); return; }
     st.until = Date.now() + hours * 3600e3; st.hours = hours; st.error = '';
     sentPos = null; saveSt();
+    register();
     startWatch(); render();
     toast('Sharing your location until ' + new Date(st.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + '.');
   }
@@ -114,10 +124,50 @@
     if (was) toast(expired ? 'Location sharing ended.' : 'Stopped sharing your location.');
   }
 
+  // ---- The group: who can be picked in "Share with" -----------------------------------------
+  async function listDir(dir) {
+    const res = await GH.gh(GH.sharedRepo(), '/contents/' + dir);
+    if (res.status === 404) return [];
+    return res.ok ? (await res.json()).filter(x => x.type === 'file' && /\.json$/.test(x.name)) : null;
+  }
+  // Put my name in people/ (again every week) so the others can pick me.
+  async function register() {
+    if (!GH.ready() || !GH.myName() || st.registered === slug(GH.myName()) && Date.now() - (st.registeredAt || 0) < 7 * 864e5) return;
+    try {
+      const file = 'people/' + slug(GH.myName()) + '.json', cur = await GH.pullFile(GH.sharedRepo(), file);
+      await GH.pushFile(GH.sharedRepo(), file, { app: 'mhm-person', v: 1, name: GH.myName(), at: Date.now() }, cur && cur.sha, 'Join friends: ' + GH.myName());
+      st.registered = slug(GH.myName()); st.registeredAt = Date.now(); saveSt();
+    } catch (e) { /* try again next time */ }
+  }
+  async function loadPeople() {
+    const list = await listDir('people');
+    if (!list) return;
+    const me = GH.myName() ? slug(GH.myName()) : '';
+    const next = [];
+    for (const item of list) {
+      const id = item.name.replace(/\.json$/, '');
+      if (id === me) continue;
+      let p = people.find(x => x.id === id);
+      if (!p || shas[item.path] !== item.sha) {
+        const got = await GH.pullFile(GH.sharedRepo(), item.path).catch(() => null);
+        p = { id, name: String((got && got.json && got.json.name) || id).slice(0, 30) };
+        shas[item.path] = item.sha;
+      }
+      next.push(p);
+    }
+    people = next.sort((a, b) => a.name.localeCompare(b.name));
+    // First time: everyone is checked. After that, someone new starts unchecked.
+    if (!st.to) { if (people.length) { st.to = people.map(p => p.id); st.known = st.to.slice(); saveSt(); } }
+    else if (people.some(p => !st.known.includes(p.id))) { st.known = Array.from(new Set(st.known.concat(people.map(p => p.id)))); saveSt(); }
+  }
+
   // ---- Friends' spots ----------------------------------------------------------------------
+  // A spot made before "Share with" existed (no list) is for everyone in the group.
+  const forMe = j => !Array.isArray(j.to) || (GH.myName() && j.to.includes(slug(GH.myName())));
   async function poll() {
     if (!GH.ready() || document.visibilityState !== 'visible') return;
     try {
+      await loadPeople();
       const res = await GH.gh(GH.sharedRepo(), '/contents/locations');
       const list = res.status === 404 ? [] : res.ok ? await res.json() : null;
       if (!Array.isArray(list)) return;
@@ -129,10 +179,10 @@
           const got = await GH.pullFile(GH.sharedRepo(), item.path);
           const j = got && got.json;
           if (!j || j.app !== APP || !isFinite(j.lng) || !isFinite(j.lat)) continue;
-          f = { path: item.path, name: String(j.name || item.name.replace(/\.json$/, '')).slice(0, 30), lng: +j.lng, lat: +j.lat, acc: +j.acc || 0, at: +j.at || 0, until: +j.until || 0 };
+          f = { path: item.path, name: String(j.name || item.name.replace(/\.json$/, '')).slice(0, 30), lng: +j.lng, lat: +j.lat, acc: +j.acc || 0, at: +j.at || 0, until: +j.until || 0, to: Array.isArray(j.to) ? j.to.map(String) : null };
           shas[item.path] = item.sha;
         }
-        if (f.until > Date.now()) next.push(f); // a share that ran out (but wasn't cleaned up) is hidden
+        if (f.until > Date.now() && forMe(f)) next.push(f); // ran out, or not shared with me: hidden
       }
       friends = next.sort((a, b) => a.name.localeCompare(b.name));
       render();
@@ -203,16 +253,35 @@
     $('chkShareLoc').checked = on;
     $('shareFor').disabled = on;
     if (st.hours) $('shareFor').value = String(st.hours);
-    $('shareStatus').className = 'small' + (st.error && on ? ' warn' : '');
+    const to = shareTo();
+    $('shareWith').innerHTML = people.length
+      ? people.map(p => '<label><input type="checkbox" data-person="' + esc(p.id) + '"' + (to.includes(p) ? ' checked' : '') + '> ' + esc(p.name) + '</label>').join('')
+      : '<span class="small">Nobody else yet. Friends show up here once they open Friends on their map.</span>';
+    const nobody = on && people.length && !to.length;
+    $('shareStatus').className = 'small' + ((st.error || nobody) && on ? ' warn' : '');
     $('shareStatus').textContent = !on
-      ? 'Off. Friends in your shared group can\'t see you.'
-      : (st.error || (sentAt ? 'On until ' + new Date(st.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' · sent ' + ago(sentAt) + '. Keep the map open to keep it updating.' : 'On. Getting a GPS fix...'));
+      ? 'Off. Nobody can see you.'
+      : nobody ? 'On, but nobody is checked, so nobody can see you.'
+      : (st.error || (sentAt ? 'On until ' + new Date(st.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' for ' + to.map(p => p.name).join(', ') + ' · sent ' + ago(sentAt) + '. Keep the map open to keep it updating.' : 'On. Getting a GPS fix...'));
     $('friendList').innerHTML = friends.length
       ? friends.map(f => '<li data-friend="' + esc(f.path) + '"><i style="background:' + (Date.now() - f.at > STALE_AFTER ? STALE : COLOR) + '"></i>' +
           '<span class="t">' + esc(f.name) + '<small>' + esc([whereIs(f), 'seen ' + ago(f.at)].filter(Boolean).join(' · ')) + '</small></span></li>').join('')
       : '<li class="empty">Nobody else is sharing right now.</li>';
   }
-  function openSheet() { $('friendsWrap').hidden = false; render(); poll(); }
+  function openSheet() {
+    $('friendsWrap').hidden = false; render();
+    // A name is what friends see and pick; ask once, then join the group's people list.
+    if (GH.ready() && GH.askName()) register().then(poll); else poll();
+  }
+  $('shareWith').addEventListener('change', e => {
+    const id = e.target.dataset.person;
+    if (!id) return;
+    const set = new Set(st.to || people.map(p => p.id));
+    if (e.target.checked) set.add(id); else set.delete(id);
+    st.to = Array.from(set); st.known = Array.from(new Set(st.known.concat(people.map(p => p.id))));
+    saveSt(); render();
+    if (sharing()) send(true); // the change reaches friends right away
+  });
   function closeSheet() { $('friendsWrap').hidden = true; }
   $('btnFriends').addEventListener('click', openSheet);
   $('btnFriendsClose').addEventListener('click', closeSheet);

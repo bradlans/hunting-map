@@ -179,7 +179,7 @@
     }
   }
 
-  const mapReady = new Promise(resolve => (map.loaded() ? resolve() : map.once('load', resolve)));
+  const mapReady = new Promise(resolve => window.MHM.onLoad(resolve));
   status();
   Promise.all([readCache(), mapReady]).then(() => {
     initLayers(); buildIndex(); status();

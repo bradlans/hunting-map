@@ -183,7 +183,10 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 .folder-head input[type="checkbox"] { width: 18px; height: 18px; accent-color: var(--blaze); margin: 0; flex: none; }
 .folder-head .name { flex: 1; min-width: 0; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; cursor: pointer; }
 .folder-head .num { font-size: 12.5px; color: var(--muted); font-variant-numeric: tabular-nums; }
-.folder-actions { display: flex; gap: 2px; padding-left: 20px; margin: -6px 0 0; }
+.folder-actions { display: flex; gap: 2px; padding-left: 20px; margin: -6px 0 0; flex-wrap: wrap; }
+.chip-shared { font: 600 10.5px/1 var(--f-body); background: var(--blaze); color: var(--blaze-ink); border-radius: 9px; padding: 3px 6px; flex: none; text-transform: uppercase; letter-spacing: .04em; }
+.shared-line { font-size: 12px; color: var(--muted); margin: -6px 0 4px 26px; }
+.shared-line.warn { color: var(--blaze); }
 .pin-list { list-style: none; margin: 0 0 4px; padding: 0 0 0 26px; }
 .pin-list li { display: flex; align-items: center; gap: 8px; padding: 4px 0; cursor: pointer; }
 .pin-list li .t { flex: 1; min-width: 0; }

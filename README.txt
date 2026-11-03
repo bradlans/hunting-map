@@ -75,10 +75,16 @@ Friends (location sharing)
                  map. Someone new starts unticked. The map hides your dot from anyone
                  you didn't tick, but anyone who opens the shared-pins repo itself on
                  GitHub could still read it.
-  Your spot is sent about once a minute while the map is open on screen. Phones pause
-  it when the screen is off or you switch apps, so a friend's dot (purple, gray once
-  it's 10+ minutes old) shows where they were last seen. Tap a dot or a name in the
-  list for distance and direction from you, Copy GPS and Directions.
+  Your spot is sent every ~15 s while you move and every 2 min sitting still, while
+  the map is open on screen; friends' dots refresh every 15 s while someone is active.
+  Accuracy: rough cell/Wi-Fi fixes are skipped (the first spot waits up to 20 s for
+  real GPS), and sitting still the last ~45 s of GPS fixes are blended, which takes
+  typical wander of 5-10 yd down to a yard or two. The shaded ring around a dot is
+  how far off it could be. "Keep my screen on while sharing" stops the phone from
+  sleeping so the spot keeps updating (uses more battery).
+  Phones pause sharing when the screen is off or you switch apps, so a friend's dot
+  (purple, gray once it's 10+ minutes old) shows where they were last seen. Tap a dot
+  or a name in the list for distance and direction from you, Copy GPS and Directions.
   Never use it to decide whether a shot is safe.
   Stored in bradlans/shared-pins as locations/<name>.json (with the list of who it's
   for) and people/<name>.json (the group list); turning sharing off

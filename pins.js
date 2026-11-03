@@ -798,24 +798,121 @@
     setTimeout(() => URL.revokeObjectURL(a.href), 2000);
     toast('Exported ' + data.pins.length + ' pins');
   });
-  $('importFile').addEventListener('change', e => {
+  // One Import button for everything: a pin backup, a shared folder file, or Google Earth
+  // places (.kml, or .kmz which is a zipped .kml).
+  $('importFile').addEventListener('change', async e => {
     const file = e.target.files && e.target.files[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => {
-      let inc;
-      try { inc = JSON.parse(reader.result); } catch (err) { toast('That file is not a pin backup.'); return; }
-      const sh = readShare(inc);
-      if (sh) { offerShare(sh); return; } // a shared folder saved as a file
-      if (!inc || !Array.isArray(inc.pins)) { toast('That file is not a pin backup.'); return; }
-      const before = data.pins.length;
-      mergeInto(data, inc);
-      changed();
-      toast('Imported. You now have ' + data.pins.length + ' pins (' + Math.max(0, data.pins.length - before) + ' new).');
-    };
-    reader.readAsText(file);
     e.target.value = '';
+    if (!file) return;
+    let bytes;
+    try { bytes = new Uint8Array(await file.arrayBuffer()); } catch (err) { toast('Could not read that file.'); return; }
+    const isZip = bytes[0] === 0x50 && bytes[1] === 0x4b; // "PK": a .kmz
+    let text = '';
+    try { text = isZip ? await kmlFromKmz(bytes) : new TextDecoder().decode(bytes); }
+    catch (err) { console.error(err); toast('Could not open that .kmz file.'); return; }
+    if (isZip || /^\s*(<\?xml[^>]*>\s*)?<kml[\s>]/i.test(text) || /\.kml$/i.test(file.name)) { offerKml(text, file.name); return; }
+    let inc;
+    try { inc = JSON.parse(text); } catch (err) { toast('That file is not a pin backup or a Google Earth file.'); return; }
+    const sh = readShare(inc);
+    if (sh) { offerShare(sh); return; } // a shared folder saved as a file
+    if (!inc || !Array.isArray(inc.pins)) { toast('That file is not a pin backup.'); return; }
+    const before = data.pins.length;
+    mergeInto(data, inc);
+    changed();
+    toast('Imported. You now have ' + data.pins.length + ' pins (' + Math.max(0, data.pins.length - before) + ' new).');
   });
+
+  // ---- Google Earth (KML / KMZ) import ------------------------------------------------
+  // A .kmz is a zip; read its directory and inflate the main .kml (doc.kml, else the first).
+  async function kmlFromKmz(u8) {
+    const dv = new DataView(u8.buffer, u8.byteOffset, u8.byteLength);
+    let end = -1;
+    for (let i = u8.length - 22; i >= Math.max(0, u8.length - 65557); i--) if (dv.getUint32(i, true) === 0x06054b50) { end = i; break; }
+    if (end < 0) throw new Error('not a zip');
+    const entries = [];
+    for (let k = 0, p = dv.getUint32(end + 16, true), n = dv.getUint16(end + 10, true); k < n && dv.getUint32(p, true) === 0x02014b50; k++) {
+      const nameLen = dv.getUint16(p + 28, true);
+      entries.push({ name: new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nameLen)), method: dv.getUint16(p + 10, true), size: dv.getUint32(p + 20, true), at: dv.getUint32(p + 42, true) });
+      p += 46 + nameLen + dv.getUint16(p + 30, true) + dv.getUint16(p + 32, true);
+    }
+    const e = entries.find(x => /(^|\/)doc\.kml$/i.test(x.name)) || entries.find(x => /\.kml$/i.test(x.name));
+    if (!e) throw new Error('no .kml inside');
+    const start = e.at + 30 + dv.getUint16(e.at + 26, true) + dv.getUint16(e.at + 28, true);
+    const raw = u8.subarray(start, start + e.size);
+    if (e.method === 0) return new TextDecoder().decode(raw);
+    if (e.method !== 8 || !window.DecompressionStream) throw new Error('unsupported zip');
+    return new TextDecoder().decode(await squeeze(raw, DecompressionStream));
+  }
+  // Placemark points become pins; their Google Earth folder becomes the pin folder.
+  function readKml(text, fileName) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('bad KML');
+    const child = (el, tag) => { const c = el && Array.from(el.children).find(x => x.localName === tag); return c ? c.textContent.trim() : ''; };
+    const plain = html => (/[<&]/.test(html) ? new DOMParser().parseFromString(html, 'text/html').body.textContent : html).replace(/\s+\n/g, '\n').trim();
+    const docEl = doc.getElementsByTagNameNS('*', 'Document')[0];
+    const fallback = (child(docEl, 'name') || fileName.replace(/\.(kml|kmz)$/i, '')).slice(0, 40) || 'Imported';
+    const pins = [];
+    let shapes = 0;
+    Array.from(doc.getElementsByTagNameNS('*', 'Placemark')).forEach(pm => {
+      const pt = pm.getElementsByTagNameNS('*', 'Point')[0];
+      const c = pt && (child(pt, 'coordinates') || '').split(/\s+/)[0].split(',').map(Number);
+      if (!c || !(Math.abs(c[1]) <= 90 && Math.abs(c[0]) <= 180) || (!c[0] && !c[1])) { shapes++; return; } // lines, shapes, empty points
+      let folder = '';
+      for (let n = pm.parentElement; n && !folder; n = n.parentElement) if (n.localName === 'Folder') folder = child(n, 'name');
+      pins.push({ lng: +c[0].toFixed(6), lat: +c[1].toFixed(6), name: child(pm, 'name').slice(0, 60), note: plain(child(pm, 'description')).slice(0, 1000), folder: (folder || fallback).slice(0, 40) });
+    });
+    return { pins, shapes };
+  }
+  // Pick a pin type from the name/notes; anything unclear gets an "Imported" type.
+  const TYPE_WORDS = [['scrape', /scrape/i], ['rub', /\brubs?\b|rub line/i], ['cam', /cam(era)?\b|trail ?cam/i], ['stand', /stand|blind|ladder|ground ?blind|\bsaddle\b/i],
+    ['bed', /bed(ding|s)?\b/i], ['parking', /park(ing)?\b|truck|\bcar\b/i], ['sighting', /sighting|\bbuck\b|\bdoe\b|\bdeer\b/i]];
+  function guessType(p) {
+    const s = p.name + ' ' + p.note, hit = TYPE_WORDS.find(([id, re]) => re.test(s) && data.types.some(t => t.id === id));
+    if (hit) return hit[0];
+    let t = data.types.find(x => x.id === 'imported');
+    if (!t) { t = stamp({ id: 'imported', name: 'Imported', color: '#607d8b', badge: 'IM' }); data.types.push(t); refreshIcon(t); }
+    return t.id;
+  }
+  function offerKml(text, fileName) {
+    let got;
+    try { got = readKml(text, fileName); } catch (err) { console.error(err); toast('That Google Earth file could not be read.'); return; }
+    // Skip places already on the map (same name within about 2 m), so importing twice is safe.
+    const dupe = p => data.pins.some(q => (q.name || '') === p.name && meters(q, p) < 2);
+    const fresh = got.pins.filter(p => !dupe(p)).slice(0, 5000);
+    if (!fresh.length) {
+      toast(got.pins.length ? 'Those places are already on your map.' : 'No places (points) in that file' + (got.shapes ? '; it only has lines or shapes.' : '.'));
+      return;
+    }
+    const byFolder = {};
+    fresh.forEach(p => { byFolder[p.folder] = (byFolder[p.folder] || 0) + 1; });
+    const list = Object.keys(byFolder).map(f => f + ' (' + byFolder[f] + ')').join(', ');
+    const skipped = got.pins.length - fresh.length;
+    if (narrow()) setPanel(false);
+    openShareModal('Import from Google Earth',
+      fresh.length + ' place' + (fresh.length === 1 ? '' : 's') + ' from ' + fileName + ' into ' + list + '. Folders that don\'t exist yet are made for you, and each pin gets a type from its name (or "Imported").',
+      [skipped ? skipped + ' already on your map, skipped.' : '', got.shapes ? got.shapes + ' line' + (got.shapes === 1 ? '' : 's') + '/shape' + (got.shapes === 1 ? '' : 's') + ' skipped (only points become pins).' : ''].filter(Boolean).join(' '),
+      [{ label: 'Import', primary: true, run: () => { closeShare(); importKml(fresh); } }, { label: 'Cancel', run: closeShare }]);
+  }
+  function importKml(list) {
+    const folderFor = {};
+    list.forEach(p => {
+      if (!folderFor[p.folder]) {
+        const have = data.folders.find(f => f.name.toLowerCase() === p.folder.toLowerCase());
+        folderFor[p.folder] = have || addFolder(p.folder);
+        folderFor[p.folder].visible = true;
+      }
+      data.pins.push(stampPin({ id: uid('p'), lng: p.lng, lat: p.lat, type: guessType(p), folder: folderFor[p.folder].id, name: p.name, note: p.note, created: new Date().toISOString() }));
+    });
+    changed();
+    const b = new maplibregl.LngLatBounds();
+    list.forEach(p => b.extend([p.lng, p.lat]));
+    map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 0 });
+    toast('Imported ' + list.length + ' pin' + (list.length === 1 ? '' : 's') + ' from Google Earth.');
+  }
+  const meters = (a, b) => {
+    const r = d => d * Math.PI / 180, h = Math.sin(r(b.lat - a.lat) / 2) ** 2 + Math.cos(r(a.lat)) * Math.cos(r(b.lat)) * Math.sin(r(b.lng - a.lng) / 2) ** 2;
+    return 2 * 6371008.8 * Math.asin(Math.min(1, Math.sqrt(h)));
+  };
 
   // ---- GitHub sync --------------------------------------------------------------
   // Settings stay in this browser only. The key is a fine-grained GitHub token limited

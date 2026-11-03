@@ -244,6 +244,11 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 .share-switch input:focus-visible + .track { outline: 2px solid var(--blaze); outline-offset: 2px; }
 .share-for { display: flex; align-items: center; gap: 8px; margin: 8px 0 4px; font-size: 13px; color: var(--muted); }
 .share-for select { font: 14px var(--f-body); color: var(--fg); background: var(--bg); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; }
+.share-with { margin: 6px 0 2px; }
+.share-with #shareWith { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.share-with label { display: inline-flex; align-items: center; gap: 6px; padding: 6px 10px; border: 1px solid var(--line); border-radius: 18px; font-size: 14px; cursor: pointer; }
+.share-with label:has(input:checked) { border-color: var(--blaze); background: color-mix(in srgb, var(--blaze) 14%, transparent); }
+.share-with input { width: 16px; height: 16px; accent-color: var(--blaze); margin: 0; }
 .friend-list { list-style: none; margin: 10px 0 6px; padding: 0; border-top: 1px solid var(--line); }
 .friend-list li { display: flex; align-items: center; gap: 10px; padding: 8px 0; border-bottom: 1px solid var(--line); cursor: pointer; }
 .friend-list li i { width: 14px; height: 14px; border-radius: 50%; border: 2px solid #fff; box-shadow: 0 0 0 1px rgba(0,0,0,.35); flex: none; }
@@ -460,6 +465,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
       </select>
       <span>then it turns off by itself</span>
     </div>
+    <div class="share-with"><span class="small">Share with</span><div id="shareWith"></div></div>
     <p class="small" id="shareStatus" aria-live="polite" style="margin:4px 0 0"></p>
     <ul class="friend-list" id="friendList"></ul>
     <p class="small" style="margin:0 0 8px">Your spot updates about once a minute while the map is open on your screen. Phones pause it when the screen is off, so a friend's dot shows when they were last seen. Never use it to decide if a shot is safe.</p>

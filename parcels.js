@@ -202,8 +202,10 @@
   $('chkParcels').checked = ui.show;
   $('chkParcels').addEventListener('change', e => { ui.show = e.target.checked; saveUi(); applyVisibility(); loadView(); });
   $('parcelCounties').textContent = SOURCES.length
-    ? 'Counties: ' + SOURCES.map(s => s.county + (s.owner ? '' : '*')).join(', ') + (SOURCES.some(s => !s.owner) ? '. * = no owner names.' : '.')
+    ? SOURCES.length + ' counties: ' + SOURCES.map(s => s.county + (s.owner ? '' : '*')).join(', ') + (SOURCES.some(s => !s.owner) ? '. * = no owner names.' : '.')
     : '';
+  // One line until tapped, so the list doesn't take over the panel.
+  $('parcelCounties').addEventListener('click', e => e.currentTarget.classList.toggle('open'));
   map.on('zoomend', status);
   status();
   // For tests and the console.

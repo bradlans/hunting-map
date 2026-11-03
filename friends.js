@@ -1,6 +1,7 @@
 // Michigan Hunting Map - friend locations.
 // "Share my location" (Friends button) writes your spot to locations/<name>.json in the
-// shared repo about once a minute, for a set time; turning it off deletes the file.
+// shared repo, for a set time: every ~15 s while you move, every 2 min sitting still.
+// Turning it off deletes the file.
 // Each spot lists who it is for ("Share with"); the map only shows a friend's dot to the
 // people they picked. Everyone who opens Friends adds their name to people/<name>.json so
 // they show up in each other's Share with list.
@@ -15,12 +16,15 @@
 
   const APP = 'mhm-location';
   const KEY = 'mhm.share.v1';
-  const SEND_EVERY = 60e3, POLL_EVERY = 60e3, MIN_MOVE = 15; // ms, ms, meters
+  const MOVE_EVERY = 15e3, STILL_EVERY = 2 * 60e3; // send at most every 15 s on the move; check in every 2 min sitting still
+  const POLL_FAST = 15e3, POLL_SLOW = 60e3; // look for friends' new spots (fast while someone is active)
+  const GOOD_FIX = 25, FIRST_WAIT = 20e3; // meters; how long to hold out for a good first fix
   const COLOR = '#8e5cff', STALE = '#9a9a9a', STALE_AFTER = 10 * 60e3;
 
   const st = (() => { try { return JSON.parse(localStorage.getItem(KEY)) || {}; } catch (e) { return {}; } })();
   function saveSt() { try { localStorage.setItem(KEY, JSON.stringify(st)); } catch (e) { /* storage blocked */ } }
-  let watchId = null, myPos = null, sentPos = null, sentAt = 0, sendTimer = null, pollTimer = null, sending = false;
+  let watchId = null, myPos = null, myAcc = 0, sentPos = null, sentAcc = 0, sentAt = 0, sendTimer = null, pollTimer = null, sending = false;
+  let fixes = [], lastGoodAt = 0, watchStarted = 0, mySha = null, wakeLock = null, peopleAt = 0;
   let friends = []; // [{ name, lng, lat, acc, at, until }]
   let people = []; // [{ id, name }] everyone else in the shared group, for "Share with"
   const shas = {}; // path -> sha, so unchanged friend files aren't fetched again
@@ -58,20 +62,54 @@
     return me ? dist(meters(me, [f.lng, f.lat])) + ' ' + bearing(me, [f.lng, f.lat]) : '';
   }
 
+  // ---- Where am I: cleaning up GPS ---------------------------------------------------------
+  // Phones hand out rough cell/Wi-Fi fixes first and GPS fixes after, and even good fixes
+  // wander a few yards. So: drop rough fixes once GPS is in, and while standing still blend
+  // the last ~45 s of good fixes (better fixes count more). Moving starts a fresh blend so
+  // the spot keeps up with you.
+  function estimate() {
+    if (!fixes.length) return null;
+    const best = Math.min.apply(null, fixes.map(f => f.acc));
+    const use = fixes.filter(f => f.acc <= best * 2);
+    let w = 0, x = 0, y = 0;
+    use.forEach(f => { const k = 1 / (f.acc * f.acc); w += k; x += f.p[0] * k; y += f.p[1] * k; });
+    return { p: [x / w, y / w], acc: Math.max(best / Math.sqrt(use.length), best * 0.5) };
+  }
+  function onFix(pos) {
+    const c = pos.coords, t = pos.timestamp || Date.now();
+    const fix = { p: [c.longitude, c.latitude], acc: c.accuracy || 999, t };
+    if (fix.acc > 100 && t - lastGoodAt < 60e3) return; // a rough fix right after a good one: ignore
+    const est = estimate();
+    const moving = (c.speed != null && c.speed > 0.8) || (est && meters(est.p, fix.p) > Math.max(est.acc, fix.acc, 8) * 1.5);
+    if (moving) fixes = [];
+    fixes = fixes.concat([fix]).filter(f => t - f.t < 45e3).slice(-15);
+    if (fix.acc <= 50) lastGoodAt = t;
+    const e = estimate();
+    myPos = e.p; myAcc = e.acc; st.error = '';
+    maybeSend();
+    render();
+  }
+  function maybeSend() {
+    if (!myPos || !sharing()) return;
+    const since = Date.now() - sentAt;
+    if (!sentPos) { if (myAcc <= GOOD_FIX || Date.now() - watchStarted > FIRST_WAIT) send(); return; }
+    const moved = meters(sentPos, myPos) >= Math.max(8, myAcc * 0.5);
+    const sharper = myAcc < sentAcc * 0.7 && meters(sentPos, myPos) >= 2; // the blend has settled in
+    if (((moved || sharper) && since >= MOVE_EVERY) || since >= STILL_EVERY) send();
+  }
+
   // ---- Sending my spot -------------------------------------------------------------------
-  async function send(force) {
+  async function send() {
     if (!sharing() || !myPos || sending || document.visibilityState !== 'visible') return;
-    const moved = !sentPos || meters(sentPos, myPos) >= MIN_MOVE;
-    if (!force && !moved && Date.now() - sentAt < 5 * SEND_EVERY) return; // standing still: check in every 5 min
     sending = true;
-    const body = { app: APP, v: 2, name: GH.myName(), lng: +myPos[0].toFixed(6), lat: +myPos[1].toFixed(6), acc: Math.round(st.acc || 0), at: Date.now(), until: st.until, to: shareTo().map(p => p.id) };
+    const body = { app: APP, v: 2, name: GH.myName(), lng: +myPos[0].toFixed(6), lat: +myPos[1].toFixed(6), acc: Math.round(myAcc), at: Date.now(), until: st.until, to: shareTo().map(p => p.id) };
+    const msg = 'Location: ' + body.name;
     try {
-      let cur = await GH.pullFile(GH.sharedRepo(), myFile());
-      if (!(await GH.pushFile(GH.sharedRepo(), myFile(), body, cur && cur.sha, 'Location: ' + body.name))) {
-        cur = await GH.pullFile(GH.sharedRepo(), myFile());
-        await GH.pushFile(GH.sharedRepo(), myFile(), body, cur && cur.sha, 'Location: ' + body.name);
-      }
-      sentPos = myPos; sentAt = body.at; st.error = '';
+      // Save with the last known version id; only look it up again if that is stale.
+      let ok = await GH.pushFile(GH.sharedRepo(), myFile(), body, mySha, msg);
+      if (!ok) { const cur = await GH.pullFile(GH.sharedRepo(), myFile()); ok = await GH.pushFile(GH.sharedRepo(), myFile(), body, cur && cur.sha, msg); }
+      mySha = typeof ok === 'string' ? ok : null;
+      sentPos = myPos; sentAcc = myAcc; sentAt = body.at; st.error = '';
     } catch (err) {
       st.error = err.friendly ? err.message : 'Could not reach GitHub. Will try again.';
     } finally {
@@ -79,6 +117,7 @@
     }
   }
   async function removeMine() {
+    mySha = null;
     try {
       const cur = await GH.pullFile(GH.sharedRepo(), myFile());
       if (cur) await GH.gh(GH.sharedRepo(), '/contents/' + myFile(), {
@@ -90,20 +129,27 @@
 
   function startWatch() {
     if (watchId != null || !navigator.geolocation) return;
-    watchId = navigator.geolocation.watchPosition(p => {
-      myPos = [p.coords.longitude, p.coords.latitude]; st.acc = p.coords.accuracy;
-      if (!sentPos) send(true);
-      render();
-    }, err => {
+    fixes = []; lastGoodAt = 0; watchStarted = Date.now();
+    // maximumAge 0: always a fresh reading, never one the phone cached earlier.
+    watchId = navigator.geolocation.watchPosition(onFix, err => {
       st.error = err.code === 1 ? 'Location is blocked for this page. Allow location in your browser settings.' : 'Waiting for a GPS fix...';
       render();
-    }, { enableHighAccuracy: true, maximumAge: 30e3, timeout: 60e3 });
+    }, { enableHighAccuracy: true, maximumAge: 0, timeout: 30e3 });
     clearInterval(sendTimer);
-    sendTimer = setInterval(() => { if (!sharing()) stopSharing(true); else send(false); }, SEND_EVERY);
+    sendTimer = setInterval(() => { if (!sharing()) stopSharing(true); else maybeSend(); }, 5e3);
+    keepAwake();
   }
   function stopWatch() {
     if (watchId != null) navigator.geolocation.clearWatch(watchId);
     watchId = null; clearInterval(sendTimer); sendTimer = null;
+    fixes = [];
+    if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  }
+  // Optional: keep the screen from sleeping while sharing, so the spot keeps updating.
+  async function keepAwake() {
+    if (!st.awake || !sharing() || !('wakeLock' in navigator) || wakeLock || document.visibilityState !== 'visible') return;
+    try { wakeLock = await navigator.wakeLock.request('screen'); wakeLock.addEventListener('release', () => { wakeLock = null; }); }
+    catch (e) { wakeLock = null; }
   }
   function startSharing(hours) {
     if (!GH.ready()) { toast('Set up GitHub sync first (Pins tab), then share your location.'); render(); return; }
@@ -164,10 +210,10 @@
   // ---- Friends' spots ----------------------------------------------------------------------
   // A spot made before "Share with" existed (no list) is for everyone in the group.
   const forMe = j => !Array.isArray(j.to) || (GH.myName() && j.to.includes(slug(GH.myName())));
-  async function poll() {
+  async function poll(everything) {
     if (!GH.ready() || document.visibilityState !== 'visible') return;
     try {
-      await loadPeople();
+      if (everything || Date.now() - peopleAt > 5 * 60e3) { await loadPeople(); peopleAt = Date.now(); }
       const res = await GH.gh(GH.sharedRepo(), '/contents/locations');
       const list = res.status === 404 ? [] : res.ok ? await res.json() : null;
       if (!Array.isArray(list)) return;
@@ -188,24 +234,37 @@
       render();
     } catch (e) { /* offline: keep the last spots */ }
   }
+  // Check every 15 s while a friend has been active in the last 10 min (or you are sharing),
+  // otherwise once a minute.
   function startPolling() {
-    clearInterval(pollTimer);
-    pollTimer = setInterval(poll, POLL_EVERY);
-    poll();
+    clearTimeout(pollTimer);
+    const active = sharing() || friends.some(f => Date.now() - f.at < STALE_AFTER);
+    pollTimer = setTimeout(() => poll().then(startPolling, startPolling), active ? POLL_FAST : POLL_SLOW);
   }
 
   // ---- Map --------------------------------------------------------------------------------
   function geojson() {
     return {
       type: 'FeatureCollection',
-      features: friends.map(f => ({
-        type: 'Feature', geometry: { type: 'Point', coordinates: [f.lng, f.lat] },
-        properties: { path: f.path, label: f.name + ' · ' + ago(f.at), stale: Date.now() - f.at > STALE_AFTER },
-      })),
+      features: friends.map(f => {
+        // Accuracy circle radius in screen pixels at zoom 0 (MapLibre's world is 512 px wide).
+        const r0 = (f.acc || 0) / (78271.517 * Math.cos(rad(f.lat)));
+        return {
+          type: 'Feature', geometry: { type: 'Point', coordinates: [f.lng, f.lat] },
+          properties: { path: f.path, label: f.name + ' · ' + ago(f.at), stale: Date.now() - f.at > STALE_AFTER, r0, r24: r0 * 2 ** 24 },
+        };
+      }),
     };
   }
   function initLayers() {
     map.addSource('friends', { type: 'geojson', data: geojson() });
+    // The shaded ring is how far off the spot could be (the phone's own GPS estimate).
+    map.addLayer({ id: 'friends-acc', type: 'circle', source: 'friends',
+      paint: {
+        'circle-radius': ['interpolate', ['exponential', 2], ['zoom'], 0, ['get', 'r0'], 24, ['get', 'r24']],
+        'circle-color': ['case', ['get', 'stale'], STALE, COLOR], 'circle-opacity': 0.16,
+        'circle-stroke-color': ['case', ['get', 'stale'], STALE, COLOR], 'circle-stroke-width': 1, 'circle-stroke-opacity': 0.5,
+      } });
     map.addLayer({ id: 'friends-dot', type: 'circle', source: 'friends',
       paint: { 'circle-radius': 8, 'circle-color': ['case', ['get', 'stale'], STALE, COLOR], 'circle-stroke-color': '#ffffff', 'circle-stroke-width': 3 } });
     map.addLayer({ id: 'friends-label', type: 'symbol', source: 'friends',
@@ -220,7 +279,7 @@
       '<div class="tag"><i style="background:' + (Date.now() - f.at > STALE_AFTER ? STALE : COLOR) + '"></i>Friend location</div>' +
       '<dl><dt>Last seen</dt><dd>' + esc(ago(f.at)) + ' (' + esc(new Date(f.at).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + ')</dd>' +
       (w ? '<dt>From you</dt><dd>' + esc(w) + '</dd>' : '') +
-      (f.acc ? '<dt>Accuracy</dt><dd>about ' + Math.round(f.acc * 1.0936) + ' yd</dd>' : '') +
+      (f.acc ? '<dt>Accuracy</dt><dd>within about ' + Math.max(1, Math.round(f.acc * 1.0936)) + ' yd (shaded ring)</dd>' : '') +
       '<dt>Sharing until</dt><dd>' + esc(new Date(f.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })) + '</dd></dl>' +
       '<div class="pin-actions"><button class="btn" data-act="copy">Copy GPS</button>' +
       '<a class="btn" target="_blank" rel="noopener" href="https://www.google.com/maps/dir/?api=1&destination=' + f.lat + ',' + f.lng + '">Directions</a></div>' +
@@ -262,7 +321,9 @@
     $('shareStatus').textContent = !on
       ? 'Off. Nobody can see you.'
       : nobody ? 'On, but nobody is checked, so nobody can see you.'
-      : (st.error || (sentAt ? 'On until ' + new Date(st.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + ' for ' + to.map(p => p.name).join(', ') + ' · sent ' + ago(sentAt) + '. Keep the map open to keep it updating.' : 'On. Getting a GPS fix...'));
+      : (st.error || (sentAt ? 'On until ' + new Date(st.until).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) + (to.length ? ' for ' + to.map(p => p.name).join(', ') : '') + ' · sent ' + ago(sentAt) + ' · GPS within ' + Math.max(1, Math.round(myAcc * 1.0936)) + ' yd. Keep the map open to keep it updating.'
+        : myPos ? 'On. Waiting for a sharper GPS fix (now within ' + Math.round(myAcc * 1.0936) + ' yd)...' : 'On. Getting a GPS fix...'));
+    $('chkAwake').checked = !!st.awake;
     $('friendList').innerHTML = friends.length
       ? friends.map(f => '<li data-friend="' + esc(f.path) + '"><i style="background:' + (Date.now() - f.at > STALE_AFTER ? STALE : COLOR) + '"></i>' +
           '<span class="t">' + esc(f.name) + '<small>' + esc([whereIs(f), 'seen ' + ago(f.at)].filter(Boolean).join(' · ')) + '</small></span></li>').join('')
@@ -271,8 +332,13 @@
   function openSheet() {
     $('friendsWrap').hidden = false; render();
     // A name is what friends see and pick; ask once, then join the group's people list.
-    if (GH.ready() && GH.askName()) register().then(poll); else poll();
+    if (GH.ready() && GH.askName()) register().then(() => poll(true)); else poll(true);
   }
+  if (!('wakeLock' in navigator)) $('awakeRow').hidden = true;
+  $('chkAwake').addEventListener('change', e => {
+    st.awake = e.target.checked; saveSt();
+    if (st.awake) keepAwake(); else if (wakeLock) { wakeLock.release().catch(() => {}); wakeLock = null; }
+  });
   $('shareWith').addEventListener('change', e => {
     const id = e.target.dataset.person;
     if (!id) return;
@@ -280,13 +346,13 @@
     if (e.target.checked) set.add(id); else set.delete(id);
     st.to = Array.from(set); st.known = Array.from(new Set(st.known.concat(people.map(p => p.id))));
     saveSt(); render();
-    if (sharing()) send(true); // the change reaches friends right away
+    if (sharing()) send(); // the change reaches friends right away
   });
   function closeSheet() { $('friendsWrap').hidden = true; }
   $('btnFriends').addEventListener('click', openSheet);
   $('btnFriendsClose').addEventListener('click', closeSheet);
   $('friendsWrap').addEventListener('click', e => { if (e.target === $('friendsWrap')) closeSheet(); });
-  $('btnFriendsRefresh').addEventListener('click', () => { poll(); send(true); toast('Refreshing friends...'); });
+  $('btnFriendsRefresh').addEventListener('click', () => { poll(true).then(startPolling); send(); toast('Refreshing friends...'); });
   $('chkShareLoc').addEventListener('change', e => { if (e.target.checked) startSharing(+$('shareFor').value); else stopSharing(false); });
   $('friendList').addEventListener('click', e => {
     const li = e.target.closest('[data-friend]');
@@ -300,15 +366,15 @@
   // Back on screen: send right away and pick up friends' new spots.
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState !== 'visible') return;
-    if (sharing()) send(true); else if (st.until) stopSharing(true);
-    poll();
+    if (sharing()) { send(); keepAwake(); } else if (st.until) stopSharing(true);
+    poll().then(startPolling);
   });
   setInterval(render, 30e3); // keep "x min ago" current
 
   window.MHM.onLoad(initLayers);
   if (sharing()) startWatch(); else if (st.until) stopSharing(true); // resume, or tidy up an expired share
   render();
-  startPolling();
+  poll(true).then(startPolling, startPolling);
 
-  window.MHM.friends = { start: startSharing, stop: stopSharing, poll, list: () => friends };
+  window.MHM.friends = { start: startSharing, stop: stopSharing, poll, list: () => friends, me: () => ({ pos: myPos, acc: myAcc }) };
 })();

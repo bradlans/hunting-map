@@ -44,12 +44,24 @@ Pins
   Pin types    - edit the list of pin types (name, color, 1-2 letter badge)
 
 Sharing a folder
-  Pins tab > a folder > Share. "Send link" (phone) opens the share sheet for a text or
-  email; "Copy link" copies it; "Save as file" makes a file they open with Import pins.
-  Whoever opens the link sees "Add to my map" and gets the folder with its pins and pin
-  types. Share the same folder again later and their copy updates instead of doubling up
-  (pins they changed keep their changes; pins you deleted stay on their copy).
-  The pins travel inside the link itself, so anyone with the link can see them.
+  Pins tab > a folder > Share, then pick one:
+  Share live   - everyone you invite can add, edit and delete the folder's pins. It shows
+                 a SHARED badge, who is in it, and who last edited each pin. Changes show
+                 up when the map opens, when you tap Refresh on the folder, and a few
+                 seconds after an edit. Invite sends the join link; Leave takes it off
+                 your map (the others keep it). Newest edit wins if two people change
+                 the same pin.
+  Send a copy  - a one-time copy: "Send link", "Copy link" or "Save as file". Whoever
+                 opens it gets the pins as they are now. Sending the same folder again
+                 later updates their copy instead of doubling up.
+  Anyone with a link can see those pins, so only send it to people you trust.
+
+How live sharing is stored
+  Each live folder is one file, folders/<folder id>.json, in the private repo
+  bradlans/shared-pins: the folder name, its pins, deletes, and who has joined.
+  Everyone's own pins.json just lists which shared folders they are in.
+  Each person's GitHub key needs Contents: Read and write on bradlans/shared-pins
+  as well as their own pins repo.
 
 Sync between devices
   Pins are saved on each device. "Sync with GitHub" (Pins tab) keeps them the same

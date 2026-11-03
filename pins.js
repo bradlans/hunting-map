@@ -870,7 +870,8 @@
     const j = await res.json();
     return { sha: j.sha, json: JSON.parse(b64decode(j.content || '')) };
   }
-  // Returns false when someone else saved first (pull again and retry).
+  // Returns false when someone else saved first (pull again and retry); otherwise the new
+  // version id (sha) when GitHub sends one, or true.
   async function pushFile(repo, file, obj, sha, message) {
     const res = await gh(repo, '/contents/' + file, {
       method: 'PUT',
@@ -879,7 +880,8 @@
     });
     if (res.status === 409 || res.status === 422) return false;
     if (!res.ok) throw await explain(res, repo);
-    return true;
+    const j = await res.json().catch(() => null);
+    return (j && j.content && j.content.sha) || true;
   }
   // Pull, merge, and save back only if something changed; retried if two saves collide.
   async function syncFile(repo, file, merge, out, same, message) {

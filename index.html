@@ -192,6 +192,9 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 .pin-list li .t { flex: 1; min-width: 0; }
 .pin-list li .t small { display: block; color: var(--muted); font-size: 12px; }
 .empty { color: var(--muted); font-size: 13px; padding: 4px 0 8px 26px; margin: 0; }
+.shape-ico { width: 24px; height: 24px; flex: none; display: inline-block; position: relative; }
+.shape-ico.line::after { content: ""; position: absolute; left: 2px; right: 2px; top: 11px; height: 3px; border-radius: 2px; background: var(--c); transform: rotate(-30deg); box-shadow: 0 0 0 1px rgba(0,0,0,.45); }
+.shape-ico.area::after { content: ""; position: absolute; inset: 4px; border-radius: 3px; background: color-mix(in srgb, var(--c) 35%, transparent); border: 2px solid var(--c); }
 .type-row { display: flex; align-items: center; gap: 6px; padding: 6px 0; border-bottom: 1px solid var(--line); }
 .type-row:last-child { border-bottom: 0; }
 .type-row input[type="text"] { flex: 1; min-width: 0; font: 15px var(--f-body); color: var(--fg); background: transparent; border: 1px solid transparent; border-radius: 6px; padding: 5px 6px; }
@@ -423,6 +426,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
   <button class="btn" id="btnMeasureMe" type="button">From me</button>
   <button class="btn" id="btnMeasureUndo" type="button">Undo</button>
   <button class="btn" id="btnMeasureClear" type="button">Clear</button>
+  <button class="btn" id="btnMeasureSave" type="button">Save</button>
   <button class="btn primary" id="btnMeasureDone" type="button">Done</button>
 </div>
 
@@ -437,6 +441,21 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
     <div class="actions">
       <button class="btn danger" type="button" id="btnPinDelete">Delete</button>
       <span><button class="btn" type="button" id="btnPinCancel">Cancel</button><button class="btn primary" type="submit">Save pin</button></span>
+    </div>
+  </form>
+</div>
+
+<div class="editor-wrap" id="shapeWrap" hidden>
+  <form class="editor" id="shapeForm" aria-labelledby="shapeTitle">
+    <h3 id="shapeTitle">Save line</h3>
+    <p class="small" id="shapeSize" style="margin:-6px 0 10px"></p>
+    <label class="field">Name <input type="text" id="shapeName" maxlength="60" placeholder="Optional, e.g. Walk-in route"></label>
+    <label class="field">Folder <select id="shapeFolder"></select></label>
+    <label class="field">Color <input type="color" id="shapeColor" value="#ffb300" style="height:36px;padding:2px"></label>
+    <label class="field">Notes <textarea id="shapeNote" maxlength="1000" placeholder="Optional"></textarea></label>
+    <div class="actions">
+      <button class="btn danger" type="button" id="btnShapeDelete">Delete</button>
+      <span><button class="btn" type="button" id="btnShapeCancel">Cancel</button><button class="btn primary" type="submit">Save</button></span>
     </div>
   </form>
 </div>

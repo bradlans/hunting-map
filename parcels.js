@@ -165,7 +165,7 @@
     resolveUrls().then(loadView);
     map.on('moveend', scheduleLoad);
   }
-  map.once('load', initLayers);
+  window.MHM.onLoad(initLayers);
 
   // ---- Tap lookup (used by app.js) ----------------------------------------------------
   window.MHM.parcelAt = point => {

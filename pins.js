@@ -369,7 +369,7 @@
   map.doubleClickZoom.disable();
   map.on('dblclick', e => {
     e.preventDefault();
-    if (placing || !$('editorWrap').hidden) return;
+    if (placing || window.MHM.measuring || !$('editorWrap').hidden) return;
     dropAt(e.lngLat.lng, e.lngLat.lat);
   });
   const box = map.getCanvasContainer();
@@ -377,7 +377,7 @@
   function cancelPress() { clearTimeout(pressTimer); pressTimer = null; }
   box.addEventListener('touchstart', ev => {
     cancelPress();
-    if (ev.touches.length !== 1 || placing || !$('editorWrap').hidden) return;
+    if (ev.touches.length !== 1 || placing || window.MHM.measuring || !$('editorWrap').hidden) return;
     pressAt = touchPoint(ev.touches[0]);
     pressTimer = setTimeout(() => {
       pressTimer = null;

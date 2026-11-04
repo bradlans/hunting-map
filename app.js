@@ -300,17 +300,26 @@
     save();
   }
   function setVis(layer, on) { if (map.getLayer(layer)) map.setLayoutProperty(layer, 'visibility', on ? 'visible' : 'none'); }
+  // DNR programs on private land (hap.js, cf.js keep their own on/off); shown in the State group.
+  const PROGRAMS = ['chkHap', 'chkCf'];
+  const programsOn = () => PROGRAMS.filter(id => $(id).checked).length;
+  function setPrograms(on) {
+    PROGRAMS.forEach(id => { const b = $(id); if (b.checked !== on) { b.checked = on; b.dispatchEvent(new Event('change')); } });
+  }
   function applyCats() {
     const f = ['in', ['get', 'c'], ['literal', state.cats]];
     if (map.getLayer('land-fill')) { map.setFilter('land-fill', f); map.setFilter('land-line', f); }
     const tick = (box, on, all) => { box.checked = on === all; box.indeterminate = on > 0 && on < all; };
     GROUPS.forEach(g => {
-      const on = g.cats.filter(c => state.cats.indexOf(c.c) >= 0).length;
-      tick($('grp-' + g.id), on, g.cats.length);
-      // Collapsed groups say how many of their categories are showing.
-      $('cnt-' + g.id).textContent = on === g.cats.length ? '' : on + ' of ' + g.cats.length;
+      // HAP and Commercial Forest sit inside the State group and count with it.
+      const extra = g.id === 'state' ? PROGRAMS.length : 0;
+      const on = g.cats.filter(c => state.cats.indexOf(c.c) >= 0).length + (extra ? programsOn() : 0);
+      const all = g.cats.length + extra;
+      tick($('grp-' + g.id), on, all);
+      // Collapsed groups say how many of their layers are showing.
+      $('cnt-' + g.id).textContent = on === all ? '' : on + ' of ' + all;
     });
-    tick($('grp-all'), state.cats.length, ALL_CODES.length);
+    tick($('grp-all'), state.cats.length + programsOn(), ALL_CODES.length + PROGRAMS.length);
     ALL_CODES.forEach(c => { $('cat-' + c).checked = state.cats.indexOf(c) >= 0; });
     const huntOnly = state.cats.length === HUNTING_CODES.length && HUNTING_CODES.every(c => state.cats.indexOf(c) >= 0);
     $('btnHunt').textContent = huntOnly ? 'Show all' : 'Hunting only';
@@ -332,17 +341,23 @@
           '<span class="lbl">' + esc(c.name) + '<span class="note' + (c.warn ? ' warn' : '') + '">' + esc(c.note) + '</span></span></label>'
         ).join('') + '</div></div>'
       ).join('') + '</div></div>';
+    if ($('dnrPrograms')) $('kids-state').appendChild($('dnrPrograms')); // HAP and Commercial Forest rows, from index.html
+    PROGRAMS.forEach(id => $(id).addEventListener('change', () => applyCats()));
     host.querySelectorAll('.twisty').forEach(b => b.addEventListener('click', () => {
       const open = b.getAttribute('aria-expanded') !== 'true';
       b.setAttribute('aria-expanded', String(open));
       $(b.getAttribute('aria-controls')).hidden = !open;
     }));
-    $('grp-all').addEventListener('change', e => { state.cats = e.target.checked ? ALL_CODES.slice() : []; applyCats(); });
+    $('grp-all').addEventListener('change', e => {
+      state.cats = e.target.checked ? ALL_CODES.slice() : [];
+      setPrograms(e.target.checked); applyCats();
+    });
     GROUPS.forEach(g => {
       $('grp-' + g.id).addEventListener('change', e => {
         const codes = g.cats.map(c => c.c);
         state.cats = state.cats.filter(c => codes.indexOf(c) < 0);
         if (e.target.checked) state.cats = state.cats.concat(codes);
+        if (g.id === 'state') setPrograms(e.target.checked);
         applyCats();
       });
       g.cats.forEach(c => $('cat-' + c.c).addEventListener('change', e => {
@@ -389,6 +404,7 @@
   $('btnHunt').addEventListener('click', () => {
     const huntOnly = $('btnHunt').textContent === 'Show all';
     state.cats = huntOnly ? ALL_CODES.slice() : HUNTING_CODES.slice();
+    setPrograms(true); // HAP and Commercial Forest are hunting land either way
     applyCats();
   });
 

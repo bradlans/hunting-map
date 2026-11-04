@@ -1,4 +1,4 @@
-MICHIGAN HUNTING MAP - version 2
+MICHIGAN HUNTING MAP - version 2 (updated Nov 4, 2026)
 
 What it is
   A web map for hunting Michigan: satellite / hybrid / topo base maps, contour lines,

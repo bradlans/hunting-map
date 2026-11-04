@@ -455,6 +455,8 @@
   window.MHM = { map, onLoad, toast, openPopup, closePopup, esc, $, setPanel, showTab, geo, getUserPos: () => userPos };
 
   // ---- Extras. Off by default; each one's file is only downloaded when it's switched on.
+  // They get the same ?v= tag index.html gave this file, so a phone never mixes old and new.
+  const VER = (document.currentScript && document.currentScript.src.split('?')[1]) || '';
   [
     { chk: 'chkTrees', key: 'mhm.trees.v1', file: 'trees.js', api: 'trees', name: 'Tree types' },
     { chk: 'chkCrops', key: 'mhm.crops.v1', file: 'crops.js', api: 'crops', name: 'Crop fields' },
@@ -464,9 +466,10 @@
       try { localStorage.setItem(x.key, JSON.stringify(Object.assign(pref(), { on }))); } catch (e) { /* storage blocked */ }
       const api = window.MHM[x.api];
       if (api) { if (on) api.on(); else api.off(); return; }
-      if (!on || document.querySelector('script[src="' + x.file + '"]')) return; // still downloading: it checks the box when it runs
+      if (!on || document.querySelector('script[data-extra="' + x.api + '"]')) return; // still downloading: it checks the box when it runs
       const s = document.createElement('script');
-      s.src = x.file;
+      s.src = x.file + (VER ? '?' + VER : '');
+      s.dataset.extra = x.api;
       s.onerror = () => { s.remove(); $(x.chk).checked = false; toast('Could not load ' + x.name + '. Check your connection.'); };
       document.head.appendChild(s);
     }

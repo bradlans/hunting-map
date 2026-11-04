@@ -45,7 +45,9 @@
     contours: saved.contours !== undefined ? saved.contours : true,
     wind: saved.wind !== undefined ? saved.wind : true,
     opacity: saved.opacity || 45,
-    cats: Array.isArray(saved.cats) ? saved.cats.filter(c => CATS[c]) : ALL_CODES.slice(),
+    // catsV 2: everyone starts again with every category on (once); after that their choices stick.
+    cats: Array.isArray(saved.cats) && saved.catsV === 2 ? saved.cats.filter(c => CATS[c]) : ALL_CODES.slice(),
+    catsV: 2,
     view: saved.view || { center: [-85.4, 44.6], zoom: 6.3 },
   };
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* storage off: settings just won't stick */ } }
@@ -300,26 +302,42 @@
   function setVis(layer, on) { if (map.getLayer(layer)) map.setLayoutProperty(layer, 'visibility', on ? 'visible' : 'none'); }
   function applyCats() {
     const f = ['in', ['get', 'c'], ['literal', state.cats]];
-    map.setFilter('land-fill', f); map.setFilter('land-line', f);
+    if (map.getLayer('land-fill')) { map.setFilter('land-fill', f); map.setFilter('land-line', f); }
+    const tick = (box, on, all) => { box.checked = on === all; box.indeterminate = on > 0 && on < all; };
     GROUPS.forEach(g => {
       const on = g.cats.filter(c => state.cats.indexOf(c.c) >= 0).length;
-      const box = $('grp-' + g.id);
-      box.checked = on === g.cats.length; box.indeterminate = on > 0 && on < g.cats.length;
+      tick($('grp-' + g.id), on, g.cats.length);
+      // Collapsed groups say how many of their categories are showing.
+      $('cnt-' + g.id).textContent = on === g.cats.length ? '' : on + ' of ' + g.cats.length;
     });
+    tick($('grp-all'), state.cats.length, ALL_CODES.length);
     ALL_CODES.forEach(c => { $('cat-' + c).checked = state.cats.indexOf(c) >= 0; });
     const huntOnly = state.cats.length === HUNTING_CODES.length && HUNTING_CODES.every(c => state.cats.indexOf(c) >= 0);
     $('btnHunt').textContent = huntOnly ? 'Show all' : 'Hunting only';
     save();
   }
+  // A tree: All public land > State / Federal / Local > categories. Groups start folded up
+  // every time the page opens; the arrow opens one, the checkbox turns it all on or off.
   function buildLandList() {
     const host = $('landGroups');
-    host.innerHTML = GROUPS.map(g =>
-      '<div class="grp"><label class="row"><input type="checkbox" id="grp-' + g.id + '"><span class="lbl">' + esc(g.name) + '</span></label><div class="kids">' +
-      g.cats.map(c =>
-        '<label class="row"><input type="checkbox" id="cat-' + c.c + '"><span class="sw" style="background:' + c.color + '"></span>' +
-        '<span class="lbl">' + esc(c.name) + '<span class="note' + (c.warn ? ' warn' : '') + '">' + esc(c.note) + '</span></span></label>'
-      ).join('') + '</div></div>'
-    ).join('');
+    const head = (id, name, open, extra) =>
+      '<div class="trow"><button type="button" class="twisty" aria-expanded="' + open + '" aria-controls="kids-' + id + '" aria-label="Show or hide ' + esc(name) + '"></button>' +
+      '<label class="row"><input type="checkbox" id="grp-' + id + '"><span class="lbl">' + esc(name) + (extra || '') + '</span></label></div>';
+    host.innerHTML = '<div class="tnode top">' + head('all', 'All public land', true) + '<div class="kids" id="kids-all">' +
+      GROUPS.map(g =>
+        '<div class="tnode">' + head(g.id, g.name, false, ' <small class="cnt" id="cnt-' + g.id + '"></small>') +
+        '<div class="kids leaves" id="kids-' + g.id + '" hidden>' +
+        g.cats.map(c =>
+          '<label class="row"><input type="checkbox" id="cat-' + c.c + '"><span class="sw" style="background:' + c.color + '"></span>' +
+          '<span class="lbl">' + esc(c.name) + '<span class="note' + (c.warn ? ' warn' : '') + '">' + esc(c.note) + '</span></span></label>'
+        ).join('') + '</div></div>'
+      ).join('') + '</div></div>';
+    host.querySelectorAll('.twisty').forEach(b => b.addEventListener('click', () => {
+      const open = b.getAttribute('aria-expanded') !== 'true';
+      b.setAttribute('aria-expanded', String(open));
+      $(b.getAttribute('aria-controls')).hidden = !open;
+    }));
+    $('grp-all').addEventListener('change', e => { state.cats = e.target.checked ? ALL_CODES.slice() : []; applyCats(); });
     GROUPS.forEach(g => {
       $('grp-' + g.id).addEventListener('change', e => {
         const codes = g.cats.map(c => c.c);
@@ -333,6 +351,7 @@
         applyCats();
       }));
     });
+    applyCats(); // show the saved choices right away (the map filter waits for the map)
   }
   function setPanel(open) {
     $('panel').dataset.open = String(open);

@@ -100,7 +100,11 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 .extras { padding: 10px 0 14px; }
 .extras > summary { cursor: pointer; font-size: 12px; color: var(--muted); width: max-content; }
 .extras .lbl small { color: var(--muted); font-size: 11px; }
-#cropBox, #treeBox { padding-left: 28px; }
+#cropBox, #treeBox, .extras .extra-box { padding-left: 28px; }
+.extras .extra-box .small { margin-top: 0; }
+.dnr-programs .sub { padding-left: 28px; }
+.dnr-programs .sub .small { margin: 0 0 4px; font-size: 11px; }
+.tree-sub { font-size: 11px; color: var(--muted); margin: 6px 0 0; text-transform: uppercase; letter-spacing: .06em; }
 #treeBox .row { padding: 3px 0; }
 #treeBox .slider { margin-top: 4px; }
 .crop-ctl { display: flex; align-items: center; gap: 12px; font-size: 13px; color: var(--muted); }
@@ -392,50 +396,44 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
         <button id="base-sat" data-base="sat">Satellite</button>
         <button id="base-topo" data-base="topo">Topo</button>
       </div>
-      <label class="row" style="margin-top:8px"><input type="checkbox" id="chkContours"><span class="lbl">Contour lines <span class="note">Elevation in feet, shows when zoomed in</span></span></label>
-    </section>
-
-    <section class="sec">
-      <h3>Wind <span id="windStamp" style="letter-spacing:0;text-transform:none;font-weight:500"></span></h3>
-      <label class="row"><input type="checkbox" id="chkWind" checked><span class="lbl">Observed wind <span class="note">Arrows point downwind, where scent drifts</span></span></label>
-      <div class="legend-wind" aria-hidden="true">
-        <span><i style="background:#7fd67f"></i>&lt; 8 mph</span>
-        <span><i style="background:#ffd73c"></i>8–14</span>
-        <span><i style="background:#ff8c2a"></i>15–24</span>
-        <span><i style="background:#e63030"></i>25+</span>
-      </div>
-      <p class="small" id="nearWind"></p>
-    </section>
-
-    <section class="sec">
-      <h3>Hunting Access Program</h3>
-      <label class="row"><input type="checkbox" id="chkHap" checked><span class="sw" style="background:repeating-linear-gradient(135deg,#d61c8c 0 3px,transparent 3px 7px);border-color:#d61c8c"></span><span class="lbl">HAP land <span class="note">Private land the DNR leases for public hunting. Tap a parcel for rules and check-in.</span></span></label>
-      <label class="row"><input type="checkbox" id="chkHapInactive"><span class="sw" style="background:transparent;border:2px dashed #9a9a9a"></span><span class="lbl">Show inactive parcels <span class="warn" style="color:var(--blaze);font-size:12.5px">(not open)</span> <span class="note warn">Former HAP land, not open to hunting</span></span></label>
-      <p class="small" id="hapStatus">Loading HAP land...</p>
-    </section>
-
-    <section class="sec">
-      <h3>Commercial Forest</h3>
-      <label class="row"><input type="checkbox" id="chkCf" checked><span class="sw" style="background:repeating-linear-gradient(45deg,#2f7bff 0 3px,transparent 3px 7px);border-color:#2f7bff"></span><span class="lbl">Commercial Forest land <span class="note">Private timberland open to the public on foot for hunting, fishing and trapping. No vehicles or permanent blinds. Tap for owner and rules.</span></span></label>
-      <p class="small" id="cfStatus">Loading Commercial Forest land...</p>
-    </section>
-
-    <section class="sec">
-      <h3>Private parcels</h3>
-      <label class="row"><input type="checkbox" id="chkParcels" checked><span class="sw" style="background:transparent;border:2px solid #fff4c2;box-shadow:0 0 0 1px rgba(0,0,0,.55)"></span><span class="lbl">Parcel lines <span class="note">Property lines from counties that share them for free. Zoom in to see them; tap for owner and acres.</span></span></label>
-      <p class="small" id="parcelStatus"></p>
-      <p class="small" id="parcelCounties"></p>
     </section>
 
     <section class="sec">
       <h3>Public land <button class="pill" id="btnHunt" style="box-shadow:none;background:var(--chip);padding:4px 8px;font-size:12px">Hunting only</button></h3>
       <div class="slider"><span>Fill</span><input type="range" id="landOpacity" min="10" max="90" value="45" aria-label="Public land fill opacity"><span id="landOpacityVal">45%</span></div>
       <div id="landGroups"></div>
+      <!-- DNR programs on private land; app.js moves these into State of Michigan (DNR) in the tree. -->
+      <div id="dnrPrograms" class="dnr-programs">
+        <p class="tree-sub">DNR programs on private land</p>
+        <label class="row"><input type="checkbox" id="chkHap" checked><span class="sw" style="background:repeating-linear-gradient(135deg,#d61c8c 0 3px,transparent 3px 7px);border-color:#d61c8c"></span><span class="lbl">HAP land <span class="note">Private land the DNR leases for public hunting - check in first</span></span></label>
+        <div class="sub">
+          <label class="row"><input type="checkbox" id="chkHapInactive"><span class="sw" style="background:transparent;border:2px dashed #9a9a9a"></span><span class="lbl">Show inactive HAP <span class="warn" style="color:var(--blaze);font-size:12.5px">(not open)</span></span></label>
+          <p class="small" id="hapStatus">Loading HAP land...</p>
+        </div>
+        <label class="row"><input type="checkbox" id="chkCf" checked><span class="sw" style="background:repeating-linear-gradient(45deg,#2f7bff 0 3px,transparent 3px 7px);border-color:#2f7bff"></span><span class="lbl">Commercial Forest land <span class="note">Private timberland open on foot - no vehicles or permanent blinds</span></span></label>
+        <div class="sub"><p class="small" id="cfStatus">Loading Commercial Forest land...</p></div>
+      </div>
       <p class="small">Boundaries are approximate (USGS PAD-US 4.1). Hunting notes are general guidance; check Michigan DNR rules, seasons and safety zones.</p>
     </section>
 
     <details class="extras" id="extras">
       <summary>Extras</summary>
+      <label class="row"><input type="checkbox" id="chkContours"><span class="lbl">Contour lines <small>(USGS, zoom in)</small></span></label>
+      <label class="row"><input type="checkbox" id="chkWind" checked><span class="lbl">Observed wind <small id="windStamp"></small></span></label>
+      <div class="extra-box">
+        <div class="legend-wind" aria-hidden="true" style="padding-left:0">
+          <span><i style="background:#7fd67f"></i>&lt; 8 mph</span>
+          <span><i style="background:#ffd73c"></i>8–14</span>
+          <span><i style="background:#ff8c2a"></i>15–24</span>
+          <span><i style="background:#e63030"></i>25+</span>
+        </div>
+        <p class="small" id="nearWind"></p>
+      </div>
+      <label class="row"><input type="checkbox" id="chkParcels" checked><span class="sw" style="background:transparent;border:2px solid #fff4c2;box-shadow:0 0 0 1px rgba(0,0,0,.55)"></span><span class="lbl">Parcel lines <small>(county GIS, zoom in)</small></span></label>
+      <div class="extra-box">
+        <p class="small" id="parcelStatus"></p>
+        <p class="small" id="parcelCounties"></p>
+      </div>
       <label class="row"><input type="checkbox" id="chkTrees"><span class="lbl">Tree types <small>(DNR, US Forest Service)</small></span></label>
       <div id="treeBox" class="extra-box" hidden></div>
       <label class="row"><input type="checkbox" id="chkCrops"><span class="lbl">Crop fields <small>(USDA)</small></span></label>
@@ -544,14 +542,14 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="app.js?v=20261104b"></script>
-<script src="pins.js?v=20261104b"></script>
-<script src="hap.js?v=20261104b"></script>
-<script src="cf.js?v=20261104b"></script>
-<script src="parcels.js?v=20261104b"></script>
-<script src="compass.js?v=20261104b"></script>
-<script src="measure.js?v=20261104b"></script>
-<script src="friends.js?v=20261104b"></script>
-<script src="route.js?v=20261104b"></script>
+<script src="app.js?v=20261104c"></script>
+<script src="pins.js?v=20261104c"></script>
+<script src="hap.js?v=20261104c"></script>
+<script src="cf.js?v=20261104c"></script>
+<script src="parcels.js?v=20261104c"></script>
+<script src="compass.js?v=20261104c"></script>
+<script src="measure.js?v=20261104c"></script>
+<script src="friends.js?v=20261104c"></script>
+<script src="route.js?v=20261104c"></script>
 </body>
 </html>

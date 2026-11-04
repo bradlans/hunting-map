@@ -12,7 +12,10 @@ Open it
 
 Using it
   Layers and Pins button (top) opens the panel:
-  Layers tab   - base map, contours, wind, and public land categories
+  Layers tab   - base map, then a public land tree: All public land > State of Michigan
+                 (with HAP and Commercial Forest inside it) / Federal / Local & other.
+                 Groups start folded; the arrow opens one. Contours, wind arrows, parcel
+                 lines, tree types and crop fields are under Extras at the bottom.
   Hunting only - shows just state forest, state game areas, state parks,
                  national forest and BLM land
   HAP land     - Hunting Access Program parcels (magenta stripes), live from the

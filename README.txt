@@ -42,6 +42,17 @@ Using it
                  leg labeled; switch to Area for acres. "From me" starts at your GPS
                  spot. Undo, Clear, Save (keep it as a line or area in a folder), Done.
 
+Extras (bottom of the Layers tab, tap "Extras" to open)
+  Crop fields  - off by default. When off, nothing for it is downloaded or run. When on:
+                 farm fields colored by crop from the USDA Cropland Data Layer (a yearly
+                 satellite crop map, 10 m for 2024 on, 30 m back to 2008); woods, water and
+                 towns stay clear. Pick the year and fill. Zoom in to see fields. Tapping
+                 the map adds that spot's crop history to the popup, plus a "likely this
+                 year" guess when the field is the same crop 3+ years or swaps two crops.
+                 Usually right for corn and soybeans, often wrong for hay and pasture, and
+                 misses small food plots. Each year's map comes out the next February.
+                 Needs signal (not saved for offline).
+
 Pins
   Double-click (computer) or press and hold (phone) the map to drop a pin right there.
   + Pin        - or use the crosshair: move it to the spot and tap "Drop pin here";
@@ -143,4 +154,5 @@ Files
   measure.js              measure tool (distance and area)
   friends.js              friend location sharing
   route.js                Map route (record a GPS track as a line)
+  crops.js                Extras > Crop fields (loaded only when switched on)
   data/public_land.js     public land (USGS PAD-US 4.1, Michigan, simplified)

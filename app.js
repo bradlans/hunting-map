@@ -405,9 +405,10 @@
     const parcel = window.MHM.parcelAt && window.MHM.parcelAt(e.point); // county parcels (parcels.js)
     const html = parcel && !hits.length ? '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>'
       : landHtml(hits) + (parcel ? '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>' : '');
-    const crop = window.MHM.cropPop && window.MHM.cropPop(e.lngLat); // crop history, only while Crop fields is on (crops.js)
-    if (!crop) { openPopup(e.lngLat, html); return; }
-    const el = document.createElement('div'); el.innerHTML = html; el.appendChild(crop);
+    // Extras add their own sections, only while they're switched on (trees.js, crops.js).
+    const extras = [window.MHM.treePop, window.MHM.cropPop].map(f => f && f(e.lngLat, e.point)).filter(Boolean);
+    if (!extras.length) { openPopup(e.lngLat, html); return; }
+    const el = document.createElement('div'); el.innerHTML = html; extras.forEach(x => el.appendChild(x));
     openPopup(e.lngLat, el);
   });
   map.on('mouseenter', 'wind', () => { map.getCanvas().style.cursor = 'pointer'; });
@@ -434,19 +435,24 @@
   // Shared with pins.js
   window.MHM = { map, onLoad, toast, openPopup, closePopup, esc, $, setPanel, showTab, geo, getUserPos: () => userPos };
 
-  // ---- Extras: Crop fields. Off by default; crops.js is only downloaded when it's switched on.
-  const CROPS_KEY = 'mhm.crops.v1';
-  const cropsPref = () => { try { return JSON.parse(localStorage.getItem(CROPS_KEY)) || {}; } catch (e) { return {}; } };
-  function setCrops(on) {
-    try { localStorage.setItem(CROPS_KEY, JSON.stringify(Object.assign(cropsPref(), { on }))); } catch (e) { /* storage blocked */ }
-    if (!on) { if (window.MHM.crops) window.MHM.crops.off(); return; }
-    if (window.MHM.crops) { window.MHM.crops.on(); return; }
-    const s = document.createElement('script');
-    s.src = 'crops.js';
-    s.onerror = () => { s.remove(); $('chkCrops').checked = false; toast('Could not load Crop fields. Check your connection.'); };
-    document.head.appendChild(s);
-  }
-  $('chkCrops').checked = !!cropsPref().on;
-  $('chkCrops').addEventListener('change', e => setCrops(e.target.checked));
-  if (cropsPref().on) { $('extras').open = true; setCrops(true); }
+  // ---- Extras. Off by default; each one's file is only downloaded when it's switched on.
+  [
+    { chk: 'chkTrees', key: 'mhm.trees.v1', file: 'trees.js', api: 'trees', name: 'Tree types' },
+    { chk: 'chkCrops', key: 'mhm.crops.v1', file: 'crops.js', api: 'crops', name: 'Crop fields' },
+  ].forEach(x => {
+    const pref = () => { try { return JSON.parse(localStorage.getItem(x.key)) || {}; } catch (e) { return {}; } };
+    function set(on) {
+      try { localStorage.setItem(x.key, JSON.stringify(Object.assign(pref(), { on }))); } catch (e) { /* storage blocked */ }
+      const api = window.MHM[x.api];
+      if (api) { if (on) api.on(); else api.off(); return; }
+      if (!on || document.querySelector('script[src="' + x.file + '"]')) return; // still downloading: it checks the box when it runs
+      const s = document.createElement('script');
+      s.src = x.file;
+      s.onerror = () => { s.remove(); $(x.chk).checked = false; toast('Could not load ' + x.name + '. Check your connection.'); };
+      document.head.appendChild(s);
+    }
+    $(x.chk).checked = !!pref().on;
+    $(x.chk).addEventListener('change', e => set(e.target.checked));
+    if (pref().on) { $('extras').open = true; set(true); }
+  });
 })();

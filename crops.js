@@ -139,5 +139,5 @@
   }
 
   window.MHM.crops = { on, off, history, guess };
-  on();
+  if ($('chkCrops').checked) on(); // unless it was switched off again while this file downloaded
 })();

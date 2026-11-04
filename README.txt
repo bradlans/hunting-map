@@ -43,6 +43,19 @@ Using it
                  spot. Undo, Clear, Save (keep it as a line or area in a folder), Done.
 
 Extras (bottom of the Layers tab, tap "Extras" to open)
+  Tree types   - off by default; when off, nothing for it is downloaded or run. Two published
+                 sources, each with its own checkbox, in the same colors (aspen, maple /
+                 northern hardwood, oak, pine, spruce/fir, cedar/lowland conifer, ...):
+                 State forest stands - Michigan DNR forest inventory, mapped by DNR foresters.
+                   Zoom in to see them. Tap one for cover type, the year it started (age),
+                   tree size, planted or natural, canopy, acres, the DNR's last recorded work
+                   (cuts), its current plan, survey date and the forester's note. State
+                   forest only.
+                 All land, 2018 model - US Forest Service FIA BIGMAP forest type groups, 30 m.
+                   Tap off a stand for its type. Good for the main type of a big block of
+                   woods; it is from 2018, so it misses newer cuts and clearings, and it
+                   often calls oak "maple / beech / birch".
+                 Same Michigan DNR data terms as the HAP and Commercial Forest layers.
   Crop fields  - off by default. When off, nothing for it is downloaded or run. When on:
                  farm fields colored by crop from the USDA Cropland Data Layer (a yearly
                  satellite crop map, 10 m for 2024 on, 30 m back to 2008); woods, water and
@@ -155,4 +168,5 @@ Files
   friends.js              friend location sharing
   route.js                Map route (record a GPS track as a line)
   crops.js                Extras > Crop fields (loaded only when switched on)
+  trees.js                Extras > Tree types (loaded only when switched on)
   data/public_land.js     public land (USGS PAD-US 4.1, Michigan, simplified)

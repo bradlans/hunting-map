@@ -403,8 +403,12 @@
     if (window.MHM.cfClick && window.MHM.cfClick(e)) return; // Commercial Forest (cf.js)
     const hits = landAt(e.lngLat.lng, e.lngLat.lat);
     const parcel = window.MHM.parcelAt && window.MHM.parcelAt(e.point); // county parcels (parcels.js)
-    if (parcel && !hits.length) { openPopup(e.lngLat, '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>'); return; }
-    openPopup(e.lngLat, landHtml(hits) + (parcel ? '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>' : ''));
+    const html = parcel && !hits.length ? '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>'
+      : landHtml(hits) + (parcel ? '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>' : '');
+    const crop = window.MHM.cropPop && window.MHM.cropPop(e.lngLat); // crop history, only while Crop fields is on (crops.js)
+    if (!crop) { openPopup(e.lngLat, html); return; }
+    const el = document.createElement('div'); el.innerHTML = html; el.appendChild(crop);
+    openPopup(e.lngLat, el);
   });
   map.on('mouseenter', 'wind', () => { map.getCanvas().style.cursor = 'pointer'; });
   map.on('mouseleave', 'wind', () => { map.getCanvas().style.cursor = ''; });
@@ -429,4 +433,20 @@
 
   // Shared with pins.js
   window.MHM = { map, onLoad, toast, openPopup, closePopup, esc, $, setPanel, showTab, geo, getUserPos: () => userPos };
+
+  // ---- Extras: Crop fields. Off by default; crops.js is only downloaded when it's switched on.
+  const CROPS_KEY = 'mhm.crops.v1';
+  const cropsPref = () => { try { return JSON.parse(localStorage.getItem(CROPS_KEY)) || {}; } catch (e) { return {}; } };
+  function setCrops(on) {
+    try { localStorage.setItem(CROPS_KEY, JSON.stringify(Object.assign(cropsPref(), { on }))); } catch (e) { /* storage blocked */ }
+    if (!on) { if (window.MHM.crops) window.MHM.crops.off(); return; }
+    if (window.MHM.crops) { window.MHM.crops.on(); return; }
+    const s = document.createElement('script');
+    s.src = 'crops.js';
+    s.onerror = () => { s.remove(); $('chkCrops').checked = false; toast('Could not load Crop fields. Check your connection.'); };
+    document.head.appendChild(s);
+  }
+  $('chkCrops').checked = !!cropsPref().on;
+  $('chkCrops').addEventListener('change', e => setCrops(e.target.checked));
+  if (cropsPref().on) { $('extras').open = true; setCrops(true); }
 })();

@@ -27,6 +27,19 @@ Using it
                  (with HAP and Commercial Forest inside it) / Federal / Local & other.
                  Groups start folded; the arrow opens one. Contours, wind arrows, parcel
                  lines, tree types and crop fields are under Extras at the bottom.
+  Wind and     - (Layers tab, under Public land) two tree branches sharing one Time slider
+  weather        (now to 48 hours ahead; moving either slider moves both):
+                 Wind (checkbox turns all three on/off):
+                   Observed - station arrows, measured now (not on the slider)
+                   Cones at pins - a cone from each pin on screen pointing where its scent
+                     goes at the slider's time; longer with more wind, wide when light,
+                     narrow when strong, a small circle when calm. Colored by speed. Tap
+                     inside one for its wind. Forecast from Open-Meteo.
+                   Flow - forecast streaks over the whole map (see Extras note below)
+                 Weather (checkbox shows/hides the chip): the icon and temperature at the
+                   top right are the forecast for the middle of the map at the slider's
+                   time ("+6h" when not now). Tap it for sky, feels-like, rain/snow
+                   chance, wind, clouds and humidity. Updates as you move the map.
   Hunting only - shows just state forest, state game areas / WMAs, state parks,
                  national forest, BLM land, Corps of Engineers lakes and joint
                  state / federal land (mostly WMAs)
@@ -59,10 +72,12 @@ Using it
                  spot. Undo, Clear, Save (keep it as a line or area in a folder), Done.
 
 Extras (bottom of the Layers tab, tap "Extras" to open)
-  Wind flow    - off by default; when off, nothing for it is downloaded or run. When on:
-                 forecast wind for the area on screen as white streaks flowing downwind over
-                 a speed-colored wash (blue calm, green under 15 mph, yellow, orange, red
-                 35+). The slider steps through the next 48 hours. Tap the map for the
+  Wind flow    - (now under Wind and weather > Wind > Flow) off by default; when off,
+                 nothing for it is downloaded or run. When on:
+                 forecast wind for the area on screen as streaks flowing downwind (dark on
+                 Topo and Hybrid, white on Satellite) over a speed-colored wash (blue calm,
+                 green under 15 mph, yellow, orange, red 35+). The Time slider steps
+                 through the next 48 hours. Tap the map for the
                  forecast at that spot. From Open-Meteo (free, NOAA weather models): a
                  forecast, not a measurement, so it is best for the general pattern and for
                  planning; the station arrows (Observed wind) show what was really measured.
@@ -204,6 +219,7 @@ Files
   route.js                Map route (record a GPS track as a line)
   crops.js                Extras > Crop fields (loaded only when switched on)
   trees.js                Extras > Tree types (loaded only when switched on)
-  windflow.js             Extras > Wind flow (loaded only when switched on)
+  windflow.js             Wind > Flow (loaded only when switched on)
+  wx.js                   Wind and weather tree, shared Time slider, cones at pins, weather chip
   data/public_land.js     public land (USGS PAD-US 4.1, Michigan, simplified)
   data/public_land_wv.js  public land (USGS PAD-US 4.1, West Virginia; loaded when the map shows WV)

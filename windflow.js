@@ -17,28 +17,22 @@
   const RAMP = [[0, [70, 120, 200]], [4, [90, 170, 220]], [8, [110, 200, 110]], [15, [250, 210, 60]], [25, [245, 130, 40]], [35, [220, 40, 40]], [50, [150, 40, 160]]];
   const LEGEND = [['Calm', 0], ['8', 8], ['15', 15], ['25', 25], ['35+', 35]];
 
-  let on = false, grid = null, hour = 0, fetching = false, lastFetch = 0, moveTimer = null;
+  let on = false, grid = null, fetching = false, lastFetch = 0, moveTimer = null;
   let shade = null, trails = null, raf = 0, particles = [], field = null, moving = false;
   const reduced = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
   // ---- Panel ---------------------------------------------------------------------------------
   const box = $('windFlowBox');
   box.innerHTML =
-    '<div class="crop-ctl"><span id="wfWhen">Now</span></div>' +
-    '<div class="slider" style="padding-left:0"><input type="range" id="wfHour" min="0" max="' + (HOURS - 1) + '" value="0" aria-label="Forecast hour"><span id="wfHourVal" style="min-width:34px">+0 h</span></div>' +
-    '<div class="crop-legend" aria-hidden="true">' + LEGEND.map(([t, mph]) => '<span><i style="background:' + rgb(color(mph)) + '"></i>' + t + '</span>').join('') + '<span>mph</span></div>' +
+    '<div class="crop-legend" aria-hidden="true" style="padding-top:0">' + LEGEND.map(([t, mph]) => '<span><i style="background:' + rgb(color(mph)) + '"></i>' + t + '</span>').join('') + '<span>mph</span></div>' +
     '<p class="small" id="wfStatus"></p>' +
     '<p class="small">Forecast from Open-Meteo (NOAA models), not measured. Streaks flow downwind (dark on Topo and Hybrid, white on Satellite). Pauses while you move the map.</p>';
   // Switching base maps: clear old-colored streaks and redraw in the new color.
   document.querySelectorAll('[data-base]').forEach(b => b.addEventListener('click', () => { if (on && !moving) rebuild(); }));
   const status = t => { $('wfStatus').textContent = t || ''; };
-  $('wfHour').addEventListener('input', e => { hour = +e.target.value; labelHour(); rebuild(); });
-
-  function labelHour() {
-    $('wfHourVal').textContent = '+' + hour + ' h';
-    const t = grid && grid.times[hour];
-    $('wfWhen').textContent = t ? (hour === 0 ? 'Now: ' : '') + new Date(t * 1000).toLocaleString([], { weekday: 'short', hour: 'numeric' }) : 'Now';
-  }
+  // The shared time slider (wx.js) picks the forecast hour.
+  const fc = window.MHM.fc;
+  fc.on(() => { if (!on) return; if (grid && fc.index(grid.times) == null) fetchGrid(); else rebuild(); });
 
   // ---- Colors ------------------------------------------------------------------------------------
   function color(mph) {
@@ -58,7 +52,7 @@
   function needFetch() {
     const v = viewBox();
     if (!grid) return true;
-    if (Date.now() - grid.at > MAX_AGE) return true;
+    if (Date.now() - grid.at > MAX_AGE || fc.index(grid.times) == null) return true;
     if (!covers(grid, v)) return true;
     // Zoomed in a lot: the grid is too coarse for the view.
     return (v[2] - v[0]) < (grid.box[2] - grid.box[0]) / 6;
@@ -101,9 +95,6 @@
       });
       if (!on) return;
       grid = { box: b, times, u, v: w, s, g, at: Date.now() };
-      hour = Math.min(hour, times.length - 1);
-      $('wfHour').max = String(times.length - 1);
-      labelHour();
       status('');
       rebuild();
     } catch (err) {
@@ -119,7 +110,8 @@
     const i = Math.min(N - 2, Math.floor(fx)), j = Math.min(N - 2, Math.floor(fy)), tx = fx - i, ty = fy - j;
     const k00 = j * N + i, k10 = k00 + 1, k01 = k00 + N, k11 = k01 + 1;
     const lerp = a => (a[k00] * (1 - tx) + a[k10] * tx) * (1 - ty) + (a[k01] * (1 - tx) + a[k11] * tx) * ty;
-    const h = hour;
+    const h = fc.index(gr.times);
+    if (h == null) return null;
     return [lerp(gr.u[h]), lerp(gr.v[h]), lerp(gr.s[h]), lerp(gr.g[h])];
   }
 
@@ -236,10 +228,9 @@
     const s = sample(lngLat.lng, lngLat.lat);
     if (!s) return null;
     const from = s[2] < 2 ? 'Calm' : COMPASS[Math.round(((Math.atan2(-s[0], -s[1]) * 180 / Math.PI) + 360) % 360 / 22.5) % 16];
-    const t = grid.times[hour];
     const el = document.createElement('div');
     el.className = 'pop crop-pop';
-    el.innerHTML = '<div class="crop-guess"><b>Forecast wind</b> ' + esc(t ? new Date(t * 1000).toLocaleString([], { weekday: 'short', hour: 'numeric' }) : '') + ': ' +
+    el.innerHTML = '<div class="crop-guess"><b>Forecast wind</b> ' + esc(fc.label(true)) + ': ' +
       esc(from === 'Calm' ? 'calm' : 'from ' + from + ' ' + Math.round(s[2]) + ' mph' + (s[3] > s[2] + 3 ? ', gusts ' + Math.round(s[3]) : '')) + '</div>';
     return el;
   };
@@ -268,7 +259,6 @@
     shade = trails = null; field = null; particles = []; grid = null;
     status('');
   }
-  window.MHM.windflow = { on: onFn, off: offFn, sample: (lng, lat) => (grid ? sample(lng, lat) : null), state: () => ({ on, grid: !!grid, hour, particles: particles.length }) };
-  labelHour();
+  window.MHM.windflow = { on: onFn, off: offFn, sample: (lng, lat) => (grid ? sample(lng, lat) : null), state: () => ({ on, grid: !!grid, hour: fc.hour, particles: particles.length }) };
   if ($('chkWindFlow').checked) onFn();
 })();

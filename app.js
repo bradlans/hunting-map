@@ -478,7 +478,7 @@
     const html = parcel && !hits.length ? '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>'
       : landHtml(hits) + (parcel ? '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>' : '');
     // Extras add their own sections, only while they're switched on (trees.js, crops.js).
-    const extras = [window.MHM.windFlowPop, window.MHM.treePop, window.MHM.cropPop].map(f => f && f(e.lngLat, e.point)).filter(Boolean);
+    const extras = [window.MHM.conePop, window.MHM.windFlowPop, window.MHM.treePop, window.MHM.cropPop].map(f => f && f(e.lngLat, e.point)).filter(Boolean);
     if (!extras.length) { openPopup(e.lngLat, html); return; }
     const el = document.createElement('div'); el.innerHTML = html; extras.forEach(x => el.appendChild(x));
     openPopup(e.lngLat, el);
@@ -528,6 +528,8 @@
     }
     $(x.chk).checked = !!pref().on;
     $(x.chk).addEventListener('change', e => set(e.target.checked));
-    if (pref().on) { $('extras').open = true; set(true); }
+    // Start saved-on extras once every page script has run (Wind flow needs wx.js's time slider).
+    const go = () => { if (x.chk !== 'chkWindFlow') $('extras').open = true; set(true); };
+    if (pref().on) { if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', go); else go(); }
   });
 })();

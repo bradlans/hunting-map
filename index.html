@@ -132,6 +132,38 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 .small.warn { color: var(--blaze); }
 .slider { display: flex; align-items: center; gap: 10px; font-size: 13px; color: var(--muted); padding: 2px 0 6px 28px; }
 .slider input { flex: 1; accent-color: var(--blaze); }
+/* Wind and weather tree */
+#wxSec .row .note { display: block; }
+#wxSec .kids.leaves { padding-left: 28px; }
+#wxSec .extra-box { padding-left: 28px; }
+#wxSec .extra-box .small { margin: 0 0 4px; font-size: 11px; }
+#wxSec .extra-box .small:empty { display: none; }
+.fc-row { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--muted); padding: 2px 0 6px; }
+.fc-row input { flex: 1; min-width: 0; accent-color: var(--blaze); }
+.fc-row .fc-when { min-width: 92px; text-align: right; color: var(--fg); font-weight: 600; font-size: 12.5px; }
+/* Weather chip: first in the top-right control column, narrow so it clears the top bar */
+.wx-holder { clear: both; }
+.wx-chip {
+  width: 44px; display: flex; flex-direction: column; align-items: center; gap: 0; padding: 4px 0 3px; border: 0; border-radius: 10px;
+  background: var(--bg); color: var(--fg); box-shadow: var(--shadow); cursor: pointer; font: 600 13px/1.1 var(--f-body);
+}
+.wx-chip svg { display: block; }
+.wx-chip small { font: 600 9.5px/1 var(--f-body); color: var(--blaze); }
+.wx-chip small:empty { display: none; }
+.wx-card {
+  position: absolute; z-index: 7; top: calc(10px + env(safe-area-inset-top, 0px)); right: calc(62px + env(safe-area-inset-right, 0px));
+  width: min(240px, calc(100% - 80px)); background: var(--bg); color: var(--fg); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 12px; font-size: 13px;
+}
+.wx-card .wx-head { display: flex; align-items: center; gap: 8px; }
+.wx-card .wx-head svg { width: 34px; height: 34px; flex: none; }
+.wx-card .wx-head div { flex: 1; min-width: 0; }
+.wx-card .wx-head b { display: block; font: 600 16px/1.15 var(--f-display); }
+.wx-card .wx-head small { color: var(--muted); font-size: 11.5px; }
+.wx-card .close { background: none; border: 0; color: var(--muted); font-size: 20px; cursor: pointer; padding: 0 2px; align-self: flex-start; }
+.wx-card dl { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; margin: 8px 0 0; }
+.wx-card dt { color: var(--muted); }
+.wx-card dd { margin: 0; font-variant-numeric: tabular-nums; }
+.wx-card .small { font-size: 11px; margin-top: 8px; }
 .legend-wind { display: flex; gap: 10px; flex-wrap: wrap; font-size: 12.5px; color: var(--muted); padding: 4px 0 0 28px; }
 .legend-wind span { display: inline-flex; align-items: center; gap: 4px; }
 .legend-wind i { width: 10px; height: 10px; border-radius: 50%; display: inline-block; }
@@ -416,21 +448,43 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
       <p class="small">Michigan and West Virginia. Boundaries are approximate (USGS PAD-US 4.1). Hunting notes are general guidance; check the state's DNR rules (Michigan DNR, WV DNR), seasons and safety zones.</p>
     </section>
 
+    <!-- Wind and weather (wx.js). One forecast time: the two sliders move together. -->
+    <section class="sec" id="wxSec">
+      <h3>Wind and weather</h3>
+      <div class="tnode top">
+        <div class="trow"><button type="button" class="twisty" aria-expanded="false" aria-controls="kids-wind" aria-label="Show or hide Wind"></button>
+          <label class="row"><input type="checkbox" id="grp-wind"><span class="lbl">Wind <small class="cnt" id="cnt-wind"></small></span></label></div>
+        <div class="kids leaves" id="kids-wind" hidden>
+          <div class="fc-row"><span>Time</span><input type="range" id="fcHourWind" min="0" max="47" value="0" aria-label="Forecast time for wind cones and wind flow"><span class="fc-when">Now</span></div>
+          <label class="row"><input type="checkbox" id="chkWind" checked><span class="lbl">Observed <small id="windStamp"></small><span class="note">Station arrows, measured now (not on the time slider)</span></span></label>
+          <div class="extra-box">
+            <div class="legend-wind" aria-hidden="true" style="padding-left:0">
+              <span><i style="background:#7fd67f"></i>&lt; 8 mph</span>
+              <span><i style="background:#ffd73c"></i>8–14</span>
+              <span><i style="background:#ff8c2a"></i>15–24</span>
+              <span><i style="background:#e63030"></i>25+</span>
+            </div>
+            <p class="small" id="nearWind"></p>
+          </div>
+          <label class="row"><input type="checkbox" id="chkCones"><span class="lbl">Cones at pins<span class="note">Where each pin's scent goes: longer with more wind, wider when light</span></span></label>
+          <div class="extra-box"><p class="small" id="coneStatus"></p></div>
+          <label class="row"><input type="checkbox" id="chkWindFlow"><span class="lbl">Flow<span class="note">Forecast streaks over the whole map</span></span></label>
+          <div id="windFlowBox" class="extra-box" hidden></div>
+        </div>
+      </div>
+      <div class="tnode top">
+        <div class="trow"><button type="button" class="twisty" aria-expanded="false" aria-controls="kids-weather" aria-label="Show or hide Weather"></button>
+          <label class="row"><input type="checkbox" id="chkWeather" checked><span class="lbl">Weather</span></label></div>
+        <div class="kids leaves" id="kids-weather" hidden>
+          <div class="fc-row"><span>Time</span><input type="range" id="fcHourWx" min="0" max="47" value="0" aria-label="Forecast time for weather"><span class="fc-when">Now</span></div>
+          <p class="small">The icon at the top right shows the forecast for the middle of the map at this time; tap it for details. Same time as the wind slider.</p>
+        </div>
+      </div>
+    </section>
+
     <details class="extras" id="extras">
       <summary>Extras</summary>
       <label class="row"><input type="checkbox" id="chkContours"><span class="lbl">Contour lines <small>(USGS, zoom in)</small></span></label>
-      <label class="row"><input type="checkbox" id="chkWind" checked><span class="lbl">Observed wind <small id="windStamp"></small></span></label>
-      <div class="extra-box">
-        <div class="legend-wind" aria-hidden="true" style="padding-left:0">
-          <span><i style="background:#7fd67f"></i>&lt; 8 mph</span>
-          <span><i style="background:#ffd73c"></i>8–14</span>
-          <span><i style="background:#ff8c2a"></i>15–24</span>
-          <span><i style="background:#e63030"></i>25+</span>
-        </div>
-        <p class="small" id="nearWind"></p>
-      </div>
-      <label class="row"><input type="checkbox" id="chkWindFlow"><span class="lbl">Wind flow <small>(forecast, next 48 h)</small></span></label>
-      <div id="windFlowBox" class="extra-box" hidden></div>
       <label class="row"><input type="checkbox" id="chkParcels" checked><span class="sw" style="background:transparent;border:2px solid #fff4c2;box-shadow:0 0 0 1px rgba(0,0,0,.55)"></span><span class="lbl">Parcel lines <small>(county GIS, zoom in)</small></span></label>
       <div class="extra-box">
         <p class="small" id="parcelStatus"></p>
@@ -544,14 +598,15 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="app.js?v=20261105a"></script>
-<script src="pins.js?v=20261105a"></script>
-<script src="hap.js?v=20261105a"></script>
-<script src="cf.js?v=20261105a"></script>
-<script src="parcels.js?v=20261105a"></script>
-<script src="compass.js?v=20261105a"></script>
-<script src="measure.js?v=20261105a"></script>
-<script src="friends.js?v=20261105a"></script>
-<script src="route.js?v=20261105a"></script>
+<script src="app.js?v=20261106a"></script>
+<script src="pins.js?v=20261106a"></script>
+<script src="hap.js?v=20261106a"></script>
+<script src="cf.js?v=20261106a"></script>
+<script src="parcels.js?v=20261106a"></script>
+<script src="compass.js?v=20261106a"></script>
+<script src="measure.js?v=20261106a"></script>
+<script src="friends.js?v=20261106a"></script>
+<script src="route.js?v=20261106a"></script>
+<script src="wx.js?v=20261106a"></script>
 </body>
 </html>

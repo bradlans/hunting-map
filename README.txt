@@ -1,9 +1,20 @@
-MICHIGAN HUNTING MAP - version 2 (updated Nov 4, 2026)
+MICHIGAN HUNTING MAP - version 3 (updated Nov 5, 2026)
 
 What it is
-  A web map for hunting Michigan: satellite / hybrid / topo base maps, contour lines,
-  public land by category (tick categories on/off), live wind arrows from NWS stations,
-  and your own pins in folders, synced between devices through a private GitHub repo.
+  A web map for hunting Michigan and West Virginia: satellite / hybrid / topo base maps,
+  contour lines, public land by category (tick categories on/off), live wind arrows from
+  NWS stations, forecast wind flow, and your own pins in folders, synced between devices
+  through a private GitHub repo.
+
+West Virginia
+  Public land for WV (national forests, WMAs, state forests and parks, Corps of Engineers
+  lakes) loads by itself the first time the map shows WV, so Michigan-only use stays as
+  light as before. It is the same USGS PAD-US 4.1 data as Michigan. WV DNR land is sorted by
+  its PAD-US type: conservation areas (WMAs) show as state game / wildlife area, parks as
+  state park, resource management areas as state forest. Parcel lines cover all of WV
+  (statewide map from the WV GIS Technical Center, tax year 2023, with owner names).
+  HAP, Commercial Forest and the DNR forest stands are Michigan programs and show nothing
+  in WV. Check WV DNR rules, seasons and safety zones.
 
 Open it
   https://bradlans.github.io/hunting-map/
@@ -12,12 +23,13 @@ Open it
 
 Using it
   Layers and Pins button (top) opens the panel:
-  Layers tab   - base map, then a public land tree: All public land > State of Michigan
+  Layers tab   - base map, then a public land tree: All public land > State land (DNR)
                  (with HAP and Commercial Forest inside it) / Federal / Local & other.
                  Groups start folded; the arrow opens one. Contours, wind arrows, parcel
                  lines, tree types and crop fields are under Extras at the bottom.
-  Hunting only - shows just state forest, state game areas, state parks,
-                 national forest and BLM land
+  Hunting only - shows just state forest, state game areas / WMAs, state parks,
+                 national forest, BLM land, Corps of Engineers lakes and joint
+                 state / federal land (mostly WMAs)
   HAP land     - Hunting Access Program parcels (magenta stripes), live from the
                  Michigan DNR; tap one for hunt type, check-in rules, hunter limit
                  and directions to the check-in. A saved copy works with no signal.
@@ -29,7 +41,8 @@ Using it
                  them free: Allegan, Barry, Cheboygan, Grand Traverse, Ionia, Jackson,
                  Kalamazoo, Kent, Lake, Lenawee, Macomb, Mason, Midland, Monroe,
                  Montcalm, Muskegon, Newaygo, Oakland, Oceana, Osceola, Ottawa,
-                 Roscommon, Saginaw, St. Clair. Tap for owner / parcel # / acres.
+                 Roscommon, Saginaw, St. Clair; and all of West Virginia. Tap for owner /
+                 parcel # / acres (and address in WV).
   Tap the map  - who owns that spot and whether it's open to the public
   Tap an arrow - station, wind direction and speed, gusts, how old the reading is
   Wind button  - refresh wind now
@@ -46,6 +59,16 @@ Using it
                  spot. Undo, Clear, Save (keep it as a line or area in a folder), Done.
 
 Extras (bottom of the Layers tab, tap "Extras" to open)
+  Wind flow    - off by default; when off, nothing for it is downloaded or run. When on:
+                 forecast wind for the area on screen as white streaks flowing downwind over
+                 a speed-colored wash (blue calm, green under 15 mph, yellow, orange, red
+                 35+). The slider steps through the next 48 hours. Tap the map for the
+                 forecast at that spot. From Open-Meteo (free, NOAA weather models): a
+                 forecast, not a measurement, so it is best for the general pattern and for
+                 planning; the station arrows (Observed wind) show what was really measured.
+                 Streaks pause while the map moves and when the screen is hidden (battery).
+                 Needs signal. Open-Meteo's free limit is per day; heavy panning on a busy
+                 day can hit it, and the panel says so.
   Tree types   - off by default; when off, nothing for it is downloaded or run. Two published
                  sources, each with its own checkbox, in the same colors (aspen, maple /
                  northern hardwood, oak, pine, spruce/fir, cedar/lowland conifer, ...):
@@ -143,6 +166,15 @@ Sync between devices
     https://bradlans.github.io/hunting-map/#sync=bradlans/ben-hunting-pins
   Export / Import pins makes a backup file as well.
 
+Importing map files (GeoJSON, GPX)
+  Pins tab > Backup > Import pins also takes .geojson / .json map files (CalTopo, Gaia GPS,
+  QGIS, county GIS sites) and .gpx files (Garmin, onX, most GPS apps). Points / waypoints
+  become pins, lines, routes and GPS tracks become lines, and polygons become areas
+  (outer edge). Names, descriptions and colors come along; the folder is the file's own
+  folder (CalTopo folders, a "folder" field) or else the file name. Already-imported items
+  are skipped. GeoJSON must be in latitude/longitude (WGS84); a file in state plane or
+  UTM feet/meters is refused with a note to export it again.
+
 Importing from Google Earth
   Pins tab > Backup > Import pins, then pick a .kml or .kmz (in Google Earth: right-click
   a folder or place > Save Place As). Points become pins, paths become lines and
@@ -172,4 +204,6 @@ Files
   route.js                Map route (record a GPS track as a line)
   crops.js                Extras > Crop fields (loaded only when switched on)
   trees.js                Extras > Tree types (loaded only when switched on)
+  windflow.js             Extras > Wind flow (loaded only when switched on)
   data/public_land.js     public land (USGS PAD-US 4.1, Michigan, simplified)
+  data/public_land_wv.js  public land (USGS PAD-US 4.1, West Virginia; loaded when the map shows WV)

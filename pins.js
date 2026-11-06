@@ -966,12 +966,15 @@
     let text = '';
     try { text = isZip ? await kmlFromKmz(bytes) : new TextDecoder().decode(bytes); }
     catch (err) { console.error(err); toast('Could not open that .kmz file.'); return; }
-    if (isZip || /^\s*(<\?xml[^>]*>\s*)?<kml[\s>]/i.test(text) || /\.kml$/i.test(file.name)) { offerKml(text, file.name); return; }
+    text = text.replace(/^﻿/, '');
+    if (isZip || /^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*<kml[\s>]/i.test(text) || /\.kml$/i.test(file.name)) { offerKml(text, file.name); return; }
+    if (/^\s*(<\?xml[^>]*>\s*)?(<!--[\s\S]*?-->\s*)*<gpx[\s>]/i.test(text) || /\.gpx$/i.test(file.name)) { offerFile(() => readGpx(text, file.name), file.name, 'GPS file (GPX)'); return; }
     let inc;
-    try { inc = JSON.parse(text); } catch (err) { toast('That file is not a pin backup or a Google Earth file.'); return; }
+    try { inc = JSON.parse(text); } catch (err) { toast('That file is not a pin backup, map file (GeoJSON, GPX) or Google Earth file.'); return; }
     const sh = readShare(inc);
     if (sh) { offerShare(sh); return; } // a shared folder saved as a file
-    if (!inc || !Array.isArray(inc.pins)) { toast('That file is not a pin backup.'); return; }
+    if (inc && !Array.isArray(inc.pins) && isGeoJson(inc)) { offerFile(() => readGeoJson(inc, file.name), file.name, 'map file (GeoJSON)'); return; }
+    if (!inc || !Array.isArray(inc.pins)) { toast('That file is not a pin backup or a map file this app knows.'); return; }
     const before = data.pins.length;
     mergeInto(data, inc);
     changed();
@@ -1062,9 +1065,101 @@
     if (!t) { t = stamp({ id: 'imported', name: 'Imported', color: '#607d8b', badge: 'IM' }); data.types.push(t); refreshIcon(t); }
     return t.id;
   }
-  function offerKml(text, fileName) {
+  // ---- GeoJSON (CalTopo, Gaia GPS, QGIS, county GIS) and GPX (Garmin, onX, most GPS apps) --
+  // Both end up in the same shape readKml makes, so they share its preview and import.
+  const okLngLat = c => Array.isArray(c) && c.length >= 2 && isFinite(c[0]) && isFinite(c[1]) && Math.abs(c[1]) <= 90 && Math.abs(c[0]) <= 180 && (c[0] || c[1]);
+  const fix6 = c => [+(+c[0]).toFixed(6), +(+c[1]).toFixed(6)];
+  const thinTo = (c, n) => { if (c.length <= n) return c; const step = Math.ceil(c.length / n); return c.filter((x, i) => i % step === 0 || i === c.length - 1); };
+  const asColor = v => { const s = String(v || '').trim(); return /^#?[0-9a-f]{6}$/i.test(s) ? (s[0] === '#' ? s : '#' + s).toLowerCase() : /^#[0-9a-f]{3}$/i.test(s) ? '#' + s.slice(1).split('').map(x => x + x).join('').toLowerCase() : ''; };
+  const plainText = s => { s = String(s == null ? '' : s); return (/[<&]/.test(s) ? new DOMParser().parseFromString(s, 'text/html').body.textContent : s).replace(/\s+\n/g, '\n').trim(); };
+  function isGeoJson(j) {
+    return !!j && typeof j === 'object' && (j.type === 'FeatureCollection' && Array.isArray(j.features) || j.type === 'Feature' ||
+      ['Point', 'MultiPoint', 'LineString', 'MultiLineString', 'Polygon', 'MultiPolygon', 'GeometryCollection'].indexOf(j.type) >= 0);
+  }
+  function readGeoJson(j, fileName) {
+    const fallback = String(j.name || j.title || fileName.replace(/\.(geo)?json$/i, '')).slice(0, 40) || 'Imported';
+    const feats = j.type === 'FeatureCollection' ? j.features : j.type === 'Feature' ? [j] : [{ type: 'Feature', properties: {}, geometry: j }];
+    const pins = [], shapes = [];
+    let skipped = 0, badCoords = 0;
+    // CalTopo keeps folders as their own features; its other features point at them by id.
+    const folderNames = {};
+    feats.forEach(f => { const p = f && f.properties; if (p && p.class === 'Folder' && f.id) folderNames[f.id] = String(p.title || '').trim(); });
+    const pick = (p, keys) => { for (const k of keys) { const v = p[k]; if (v != null && String(v).trim()) return String(v).trim(); } return ''; };
+    feats.forEach(f => {
+      if (!f || !f.geometry) { if (!(f && f.properties && f.properties.class === 'Folder')) skipped++; return; }
+      const p = f.properties || {};
+      const folder = (pick(p, ['folder', 'Folder', 'folderName', 'folder_name', 'layer', 'Layer']) || folderNames[p.folderId] || fallback).slice(0, 40);
+      const base = { name: pick(p, ['name', 'Name', 'NAME', 'title', 'Title', 'label', 'Label']).slice(0, 60),
+        note: plainText(pick(p, ['description', 'Description', 'desc', 'notes', 'Notes', 'note', 'comment', 'cmt'])).slice(0, 1000), folder };
+      const lineColor = asColor(p.stroke || p.color || p['marker-color']), areaColor = asColor(p.fill || p.stroke || p.color);
+      let found = false;
+      const geom = g => {
+        if (!g) return;
+        const c = g.coordinates;
+        if (g.type === 'GeometryCollection') { (g.geometries || []).forEach(geom); return; }
+        if (g.type === 'Point') { if (okLngLat(c)) { pins.push(Object.assign({ lng: fix6(c)[0], lat: fix6(c)[1] }, base)); found = true; } else badCoords++; return; }
+        if (g.type === 'MultiPoint') { (c || []).forEach(x => geom({ type: 'Point', coordinates: x })); return; }
+        if (g.type === 'LineString' || g.type === 'MultiLineString') {
+          (g.type === 'LineString' ? [c] : c || []).forEach(line => {
+            const cs = thinTo((line || []).filter(okLngLat).map(fix6), 2000);
+            if (cs.length >= 2) { shapes.push(Object.assign({ kind: 'line', coords: cs, color: lineColor }, base)); found = true; } else if ((line || []).length) badCoords++;
+          });
+          return;
+        }
+        if (g.type === 'Polygon' || g.type === 'MultiPolygon') {
+          (g.type === 'Polygon' ? [c] : c || []).forEach(poly => {
+            let cs = ((poly || [])[0] || []).filter(okLngLat).map(fix6); // outer edge only, like Google Earth import
+            if (cs.length > 3 && cs[0][0] === cs[cs.length - 1][0] && cs[0][1] === cs[cs.length - 1][1]) cs = cs.slice(0, -1);
+            cs = thinTo(cs, 2000);
+            if (cs.length >= 3) { shapes.push(Object.assign({ kind: 'area', coords: cs, color: areaColor }, base)); found = true; } else if (((poly || [])[0] || []).length) badCoords++;
+          });
+        }
+      };
+      geom(f.geometry);
+      if (!found) skipped++;
+    });
+    // A file in feet or meters (state plane, UTM) has no usable lat/lng at all.
+    if (!pins.length && !shapes.length && badCoords) throw new Error('not lat/lng');
+    return { pins, shapes, skipped };
+  }
+  function readGpx(text, fileName) {
+    const doc = new DOMParser().parseFromString(text, 'application/xml');
+    if (doc.getElementsByTagName('parsererror').length) throw new Error('bad GPX');
+    const kids = (el, tag) => Array.from(el.children).filter(x => x.localName === tag);
+    const txt = (el, tag) => { const c = kids(el, tag)[0]; return c ? c.textContent.trim() : ''; };
+    const all = (el, tag) => Array.from(el.getElementsByTagNameNS('*', tag));
+    const pt = el => [+el.getAttribute('lon'), +el.getAttribute('lat')];
+    const meta = kids(doc.documentElement, 'metadata')[0];
+    const fallback = ((meta && txt(meta, 'name')) || fileName.replace(/\.gpx$/i, '')).slice(0, 40) || 'Imported';
+    const info = el => ({ name: txt(el, 'name').slice(0, 60), note: plainText([txt(el, 'desc'), txt(el, 'cmt')].filter(Boolean).filter((v, i, a) => a.indexOf(v) === i).join('\n')).slice(0, 1000), folder: fallback });
+    // Garmin puts a track's color in <extensions><gpxx:TrackExtension><gpxx:DisplayColor>.
+    const GARMIN = { Black: '#000000', DarkRed: '#8b0000', DarkGreen: '#006400', DarkYellow: '#b8860b', DarkBlue: '#00008b', DarkMagenta: '#8b008b', DarkCyan: '#008b8b',
+      LightGray: '#d3d3d3', DarkGray: '#a9a9a9', Red: '#ff0000', Green: '#00ff00', Yellow: '#ffff00', Blue: '#0000ff', Magenta: '#ff00ff', Cyan: '#00ffff', White: '#ffffff' };
+    const colorOf = el => { const d = all(el, 'DisplayColor')[0] || all(el, 'color')[0]; const v = d ? d.textContent.trim() : ''; return GARMIN[v] || asColor(v); };
+    const pins = [], shapes = [];
+    let skipped = 0;
+    all(doc, 'wpt').forEach(w => { const c = pt(w); if (okLngLat(c)) pins.push(Object.assign({ lng: fix6(c)[0], lat: fix6(c)[1] }, info(w))); else skipped++; });
+    all(doc, 'rte').forEach(r => {
+      const cs = thinTo(kids(r, 'rtept').map(pt).filter(okLngLat).map(fix6), 2000);
+      if (cs.length >= 2) shapes.push(Object.assign({ kind: 'line', coords: cs, color: colorOf(r) }, info(r))); else skipped++;
+    });
+    all(doc, 'trk').forEach(t => {
+      // Segments are breaks in recording (GPS lost, paused); join them into one line per track.
+      const cs = thinTo(kids(t, 'trkseg').reduce((a, s) => a.concat(kids(s, 'trkpt').map(pt)), []).filter(okLngLat).map(fix6), 2000);
+      if (cs.length >= 2) shapes.push(Object.assign({ kind: 'line', coords: cs, color: colorOf(t) }, info(t))); else skipped++;
+    });
+    return { pins, shapes, skipped };
+  }
+  function offerKml(text, fileName) { offerFile(() => readKml(text, fileName), fileName, 'Google Earth file'); }
+  // kind: "Google Earth file", "map file (GeoJSON)", "GPS file (GPX)".
+  function offerFile(read, fileName, kind) {
     let got;
-    try { got = readKml(text, fileName); } catch (err) { console.error(err); toast('That Google Earth file could not be read.'); return; }
+    try { got = read(); } catch (err) {
+      console.error(err);
+      toast(err && err.message === 'not lat/lng' ? 'That file\'s points are not in latitude/longitude. Export it again as WGS84 (EPSG:4326) GeoJSON.' : 'That ' + kind + ' could not be read.');
+      return;
+    }
+    importFrom = kind === 'Google Earth file' ? 'Google Earth' : fileName;
     // Skip what's already on the map (same name and spot), so importing twice is safe.
     const dupe = p => data.pins.some(q => (q.name || '') === p.name && meters(q, p) < 2);
     const near = (a, b) => meters({ lng: a[0], lat: a[1] }, { lng: b[0], lat: b[1] }) < 2;
@@ -1083,7 +1178,7 @@
     const what = [fresh.length ? plural(fresh.length, 'place') : '', nL ? plural(nL, 'line') : '', nA ? plural(nA, 'area') : ''].filter(Boolean).join(', ');
     const skipped = (got.pins.length - fresh.length) + (got.shapes.length - freshShapes.length);
     if (narrow()) setPanel(false);
-    openShareModal('Import from Google Earth',
+    openShareModal(importFrom === 'Google Earth' ? 'Import from Google Earth' : 'Import map file',
       what + ' from ' + fileName + ' into ' + list + '. Folders that don\'t exist yet are made for you' + (fresh.length ? ', and each pin gets a type from its name (or "Imported")' : '') + '.',
       [skipped ? skipped + ' already on your map, skipped.' : '', got.skipped ? plural(got.skipped, 'item') + ' this map can\'t show (like tracks or 3D models) skipped.' : ''].filter(Boolean).join(' '),
       [{ label: 'Import', primary: true, run: () => { closeShare(); importKml(fresh, freshShapes); } }, { label: 'Cancel', run: closeShare }]);
@@ -1111,8 +1206,9 @@
     (shapes || []).forEach(s => s.coords.forEach(c => b.extend(c)));
     map.fitBounds(b, { padding: 60, maxZoom: 15, duration: 0 });
     const n = list.length + (shapes || []).length;
-    toast('Imported ' + n + ' item' + (n === 1 ? '' : 's') + ' from Google Earth.');
+    toast('Imported ' + n + ' item' + (n === 1 ? '' : 's') + ' from ' + importFrom + '.');
   }
+  let importFrom = 'Google Earth';
   // From the measure tool's Save button: name and file the line or area just measured.
   // Also used by Map route (route.js), which passes a starting name and note.
   function saveMeasured(kind, coords, done, name, note) {

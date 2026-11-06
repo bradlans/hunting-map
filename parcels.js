@@ -62,6 +62,16 @@
       note: 'Saginaw County\'s free copy dates from 2023, so ownership may have changed since.' },
     { county: 'St. Clair', url: 'https://maps.stclaircounty.org/GeoCortex_wa/rest/services/Public_GISweb/TaxParcels_Nightly/MapServer/0',
       owner: 'OWNER', pin: 'PIN', acres: 'Calc_Acres', max: 1000, paging: true, bbox: [-82.996, 42.478, -82.334, 43.17] },
+    // West Virginia publishes one statewide layer (WV GIS Technical Center, from the county
+    // assessors), "provided as a public service". COUNTY holds the state's county number.
+    { county: 'West Virginia', statewide: true, url: 'https://services.wvgis.wvu.edu/arcgis/rest/services/Planning_Cadastre/WV_Parcels/MapServer/0',
+      owner: 'FullOwnerName', pin: 'CleanParcelID', acres: 'CALC_ACRE', address: 'FullPhysicalAddress', countyNo: 'COUNTY',
+      max: 2000, paging: true, bbox: [-82.645, 37.201, -77.719, 40.638], from: 'the West Virginia statewide parcel map (WV GIS Technical Center, tax year 2023)',
+      counties: ['Barbour', 'Berkeley', 'Boone', 'Braxton', 'Brooke', 'Cabell', 'Calhoun', 'Clay', 'Doddridge', 'Fayette', 'Gilmer', 'Grant', 'Greenbrier',
+        'Hampshire', 'Hancock', 'Hardy', 'Harrison', 'Jackson', 'Jefferson', 'Kanawha', 'Lewis', 'Lincoln', 'Logan', 'McDowell', 'Marion', 'Marshall',
+        'Mason', 'Mercer', 'Mineral', 'Mingo', 'Monongalia', 'Monroe', 'Morgan', 'Nicholas', 'Ohio', 'Pendleton', 'Pleasants', 'Pocahontas', 'Preston',
+        'Putnam', 'Raleigh', 'Randolph', 'Ritchie', 'Roane', 'Summers', 'Taylor', 'Tucker', 'Tyler', 'Upshur', 'Wayne', 'Webster', 'Wetzel', 'Wirt',
+        'Wood', 'Wyoming'] },
   ];
 
   const MIN_ZOOM = 14;
@@ -96,7 +106,7 @@
   const overlaps = (a, b) => a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
   async function fetchTile(s, tx, ty) {
     const env = [tx * TILE, ty * TILE, (tx + 1) * TILE, (ty + 1) * TILE];
-    const fields = [s.owner, s.pin, s.acres, s.address].filter(Boolean).join(',') || '*';
+    const fields = [s.owner, s.pin, s.acres, s.address, s.countyNo].filter(Boolean).join(',') || '*';
     const page = s.max || 1000;
     for (let offset = 0, guard = 0; guard < 10; guard++, offset += page) {
       const url = s.url + '/query?geometry=' + env.join(',') + '&geometryType=esriGeometryEnvelope&inSR=4326' +
@@ -178,16 +188,18 @@
     const v = k => (k && p[k] != null && String(p[k]).trim() !== '' ? String(p[k]).trim() : '');
     const n = +v(s.acres);
     const acres = v(s.acres) && isFinite(n) ? (n > 0 ? n.toFixed(n < 10 ? 2 : 1) + ' acres' : '') : v(s.acres); // some counties store 0 for town lots
+    const cn = s.statewide && s.counties ? s.counties[+v(s.countyNo) - 1] : '';
+    const county = s.statewide ? (cn ? cn + ' County, ' : '') + p._c : p._c;
     return '<div class="parcel-block"><h4>' + esc(v(s.owner) || 'Private parcel') + '</h4>' +
       '<dl>' +
       (v(s.pin) ? '<dt>Parcel #</dt><dd>' + esc(v(s.pin)) + '</dd>' : '') +
       (acres ? '<dt>Size</dt><dd>' + esc(acres) + '</dd>' : '') +
       (v(s.address) ? '<dt>Address</dt><dd>' + esc(v(s.address)) + '</dd>' : '') +
-      '<dt>County</dt><dd>' + esc(p._c) + '</dd>' +
+      '<dt>County</dt><dd>' + esc(county) + '</dd>' +
       '</dl>' +
       (!v(s.owner) ? '<div class="hint">' + esc(p._c) + ' County does not share owner names in its free data.</div>' : '') +
       (s.note ? '<div class="hint">' + esc(s.note) + '</div>' : '') +
-      '<div class="hint">From ' + esc(p._c) + ' County GIS. Lines are approximate and ownership can be out of date; ask permission before hunting private land.</div></div>';
+      '<div class="hint">From ' + esc(s.from || p._c + ' County GIS') + '. Lines are approximate and ownership can be out of date; ask permission before hunting private land.</div></div>';
   };
 
   // ---- Panel ---------------------------------------------------------------------------
@@ -201,8 +213,10 @@
   }
   $('chkParcels').checked = ui.show;
   $('chkParcels').addEventListener('change', e => { ui.show = e.target.checked; saveUi(); applyVisibility(); loadView(); });
+  const COUNTIES = SOURCES.filter(s => !s.statewide), STATES = SOURCES.filter(s => s.statewide);
   $('parcelCounties').textContent = SOURCES.length
-    ? SOURCES.length + ' counties: ' + SOURCES.map(s => s.county + (s.owner ? '' : '*')).join(', ') + (SOURCES.some(s => !s.owner) ? '. * = no owner names.' : '.')
+    ? (STATES.length ? 'All of ' + STATES.map(s => s.county).join(', ') + '. ' : '') +
+      'Michigan, ' + COUNTIES.length + ' counties: ' + COUNTIES.map(s => s.county + (s.owner ? '' : '*')).join(', ') + (COUNTIES.some(s => !s.owner) ? '. * = no owner names.' : '.')
     : '';
   // One line until tapped, so the list doesn't take over the panel.
   $('parcelCounties').addEventListener('click', e => e.currentTarget.classList.toggle('open'));

@@ -312,7 +312,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 </style>
 </head>
 <body>
-<div id="map" role="application" aria-label="Map of Michigan public land"></div>
+<div id="map" role="application" aria-label="Map of public land"></div>
 
 <div class="topbar">
   <div class="brand"><i aria-hidden="true"></i>Michigan Hunting Map</div>
@@ -365,11 +365,11 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
     </section>
     <section class="sec">
       <h3>Backup</h3>
-      <p class="small" style="margin:0 0 8px">Export a backup file to keep your pins safe. Import takes a backup, a shared folder file, or Google Earth places (.kml or .kmz).</p>
+      <p class="small" style="margin:0 0 8px">Export a backup file to keep your pins safe. Import takes a backup, a shared folder file, Google Earth places (.kml or .kmz), map files (.geojson / .json from CalTopo, Gaia GPS, QGIS) or GPS files (.gpx from Garmin, onX and most GPS apps).</p>
       <div class="inline">
         <button class="btn" id="btnExport">Export pins</button>
         <label class="btn" for="importFile">Import pins</label>
-        <input type="file" id="importFile" accept=".json,.kml,.kmz,application/json,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" hidden>
+        <input type="file" id="importFile" accept=".json,.geojson,.kml,.kmz,.gpx,application/json,application/geo+json,application/gpx+xml,application/vnd.google-earth.kml+xml,application/vnd.google-earth.kmz" hidden>
       </div>
     </section>
   </div>
@@ -413,7 +413,7 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
         <label class="row"><input type="checkbox" id="chkCf" checked><span class="sw" style="background:repeating-linear-gradient(45deg,#2f7bff 0 3px,transparent 3px 7px);border-color:#2f7bff"></span><span class="lbl">Commercial Forest land <span class="note">Private timberland open on foot - no vehicles or permanent blinds</span></span></label>
         <div class="sub"><p class="small" id="cfStatus">Loading Commercial Forest land...</p></div>
       </div>
-      <p class="small">Boundaries are approximate (USGS PAD-US 4.1). Hunting notes are general guidance; check Michigan DNR rules, seasons and safety zones.</p>
+      <p class="small">Michigan and West Virginia. Boundaries are approximate (USGS PAD-US 4.1). Hunting notes are general guidance; check the state's DNR rules (Michigan DNR, WV DNR), seasons and safety zones.</p>
     </section>
 
     <details class="extras" id="extras">
@@ -429,6 +429,8 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
         </div>
         <p class="small" id="nearWind"></p>
       </div>
+      <label class="row"><input type="checkbox" id="chkWindFlow"><span class="lbl">Wind flow <small>(forecast, next 48 h)</small></span></label>
+      <div id="windFlowBox" class="extra-box" hidden></div>
       <label class="row"><input type="checkbox" id="chkParcels" checked><span class="sw" style="background:transparent;border:2px solid #fff4c2;box-shadow:0 0 0 1px rgba(0,0,0,.55)"></span><span class="lbl">Parcel lines <small>(county GIS, zoom in)</small></span></label>
       <div class="extra-box">
         <p class="small" id="parcelStatus"></p>
@@ -542,14 +544,14 @@ body { background: var(--bg); color: var(--fg); font: 15px/1.4 var(--f-body); ov
 <div class="toast" id="toast" hidden></div>
 
 <script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
-<script src="app.js?v=20261104c"></script>
-<script src="pins.js?v=20261104c"></script>
-<script src="hap.js?v=20261104c"></script>
-<script src="cf.js?v=20261104c"></script>
-<script src="parcels.js?v=20261104c"></script>
-<script src="compass.js?v=20261104c"></script>
-<script src="measure.js?v=20261104c"></script>
-<script src="friends.js?v=20261104c"></script>
-<script src="route.js?v=20261104c"></script>
+<script src="app.js?v=20261105a"></script>
+<script src="pins.js?v=20261105a"></script>
+<script src="hap.js?v=20261105a"></script>
+<script src="cf.js?v=20261105a"></script>
+<script src="parcels.js?v=20261105a"></script>
+<script src="compass.js?v=20261105a"></script>
+<script src="measure.js?v=20261105a"></script>
+<script src="friends.js?v=20261105a"></script>
+<script src="route.js?v=20261105a"></script>
 </body>
 </html>

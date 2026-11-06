@@ -4,12 +4,16 @@
 
 (function () {
   'use strict';
+  // The ?v= tag index.html gave this file; files loaded later get the same one, so a phone never mixes old and new.
+  const VER = (document.currentScript && document.currentScript.src.split('?')[1]) || '';
 
   // ---- Public land categories (PAD-US Mang_Name codes) -----------------------
   const GROUPS = [
-    { id: 'state', name: 'State of Michigan (DNR)', cats: [
+    // Michigan and West Virginia land share these. WV DNR land is split by its PAD-US
+    // designation (build_wv_land.ps1): conservation areas = WMAs, parks, resource areas = forests.
+    { id: 'state', name: 'State land (DNR)', cats: [
       { c: 'SDNR', name: 'State forest',                 color: '#86C66C', note: 'Generally open to hunting' },
-      { c: 'SFW',  name: 'State game / wildlife area',   color: '#A392DE', note: 'Open to hunting - main hunting lands' },
+      { c: 'SFW',  name: 'State game / wildlife area',   color: '#A392DE', note: 'Open to hunting - main hunting lands (WV: WMAs)' },
       { c: 'SPR',  name: 'State park / recreation area', color: '#9BAADE', note: 'Some areas open in season - check park' },
       { c: 'SDOL', name: 'State Dept. of Land',          color: '#558191', note: 'Small parcels - check access' },
       { c: 'OTHS', name: 'Other state land',             color: '#A0A0A0', note: 'e.g. Pinckney Rec Area - check' },
@@ -17,8 +21,11 @@
     { id: 'fed', name: 'Federal', cats: [
       { c: 'USFS', name: 'National forest',              color: '#89BD2A', note: 'Generally open to hunting' },
       { c: 'FWS',  name: 'National wildlife refuge',     color: '#AD5764', note: 'Limited / permit hunts only' },
-      { c: 'NPS',  name: 'National park / lakeshore',    color: '#70A170', note: 'Mostly closed - lakeshores allow some' },
+      { c: 'NPS',  name: 'National park / lakeshore',    color: '#70A170', note: 'Mostly closed - some allow hunting (WV: New River Gorge preserve)' },
       { c: 'BLM',  name: 'Bureau of Land Management',    color: '#F2DC91', note: 'Generally open' },
+      { c: 'USACE',name: 'Army Corps of Engineers lake', color: '#C9A227', note: 'Often open - many are WMAs; check the lake' },
+      { c: 'JNT',  name: 'Joint state / federal',        color: '#B58BD6', note: 'Mostly WMAs on Corps or federal land - check' },
+      { c: 'DOD',  name: 'Military (Dept. of Defense)',  color: '#6E4A2A', note: 'Restricted - no access without permission', warn: true },
       { c: 'OTHF', name: 'Other federal (Camp Grayling)',color: '#815132', note: 'Military - restricted', warn: true },
     ]},
     { id: 'local', name: 'Local & other', cats: [
@@ -34,7 +41,7 @@
   const CATS = {};
   GROUPS.forEach(g => g.cats.forEach(c => { CATS[c.c] = Object.assign({ group: g.id }, c); }));
   const ALL_CODES = Object.keys(CATS);
-  const HUNTING_CODES = ['SDNR', 'SFW', 'SPR', 'USFS', 'BLM'];
+  const HUNTING_CODES = ['SDNR', 'SFW', 'SPR', 'USFS', 'BLM', 'USACE', 'JNT'];
   const ACCESS = { OA: 'Open access', RA: 'Restricted access', XA: 'Closed to public', UK: 'Unknown' };
 
   // ---- Saved settings (per device) -------------------------------------------
@@ -45,9 +52,10 @@
     contours: saved.contours !== undefined ? saved.contours : true,
     wind: saved.wind !== undefined ? saved.wind : true,
     opacity: saved.opacity || 45,
-    // catsV 2: everyone starts again with every category on (once); after that their choices stick.
-    cats: Array.isArray(saved.cats) && saved.catsV === 2 ? saved.cats.filter(c => CATS[c]) : ALL_CODES.slice(),
-    catsV: 2,
+    // catsV 3: everyone starts again with every category on (once, for the new West Virginia
+    // categories); after that their choices stick.
+    cats: Array.isArray(saved.cats) && saved.catsV === 3 ? saved.cats.filter(c => CATS[c]) : ALL_CODES.slice(),
+    catsV: 3,
     view: saved.view || { center: [-85.4, 44.6], zoom: 6.3 },
   };
   function save() { try { localStorage.setItem(KEY, JSON.stringify(state)); } catch (e) { /* storage off: settings just won't stick */ } }
@@ -142,9 +150,12 @@
   }
 
   // ---- Wind data --------------------------------------------------------------
-  const WIND_URL = 'https://mapservices.weather.noaa.gov/vector/rest/services/obs/surface_obs/MapServer/260/query' +
-    '?where=1%3D1&geometry=-90.8,41.4,-81.8,48.6&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects' +
+  // One station query per state the map has shown (Michigan always).
+  const WIND_BOX = { mi: '-90.8,41.4,-81.8,48.6', wv: '-83.2,36.9,-77.3,40.9' };
+  const windUrl = box => 'https://mapservices.weather.noaa.gov/vector/rest/services/obs/surface_obs/MapServer/260/query' +
+    '?where=1%3D1&geometry=' + box + '&geometryType=esriGeometryEnvelope&inSR=4326&spatialRel=esriSpatialRelIntersects' +
     '&outFields=stationname,timeobs,winddir,windspeed,windgust,temperature&outSR=4326&f=geojson';
+  let windRegions = '';
   const COMPASS = ['N', 'NNE', 'NE', 'ENE', 'E', 'ESE', 'SE', 'SSE', 'S', 'SSW', 'SW', 'WSW', 'W', 'WNW', 'NW', 'NNW'];
   const KT_TO_MPH = 1.15078;
   let windFeatures = [], windFetchedAt = null, windTimer = null, userPos = null;
@@ -153,9 +164,14 @@
     const ageEl = document.getElementById('windAge');
     if (manual) ageEl.textContent = 'updating...';
     try {
-      const res = await fetch(WIND_URL, { cache: 'no-store' });
-      if (!res.ok) throw new Error('NWS answered ' + res.status);
-      const gj = await res.json();
+      const ids = REGIONS.filter(r => r.start || r.state).map(r => r.id);
+      windRegions = ids.join(',');
+      const all = await Promise.all(ids.map(async id => {
+        const res = await fetch(windUrl(WIND_BOX[id]), { cache: 'no-store' });
+        if (!res.ok) throw new Error('NWS answered ' + res.status);
+        return (await res.json()).features || [];
+      }));
+      const gj = { features: [].concat.apply([], all) };
       windFeatures = (gj.features || []).filter(f => f.geometry && f.properties && f.properties.windspeed != null).map(f => {
         const p = f.properties;
         const mph = Math.round(p.windspeed * KT_TO_MPH);
@@ -212,27 +228,46 @@
 
   // ---- Public land: loaded after the map so the map shows right away ---------
   // A plain <script> (not fetch) so the page also works opened from disk.
+  // Michigan loads at start; West Virginia (data/public_land_wv.js) only once the map shows WV.
+  const REGIONS = [
+    { id: 'mi', name: 'Michigan', file: 'data/public_land.js', global: 'PUBLIC_LAND', bbox: [-90.42, 41.69, -82.12, 48.31], start: true },
+    { id: 'wv', name: 'West Virginia', file: 'data/public_land_wv.js', global: 'PUBLIC_LAND_WV', bbox: [-82.65, 37.2, -77.71, 40.64] },
+  ];
   let landIndex = [], landLoaded = false;
-  function loadLand() {
-    toast('Loading public land...');
+  const landFeatures = [];
+  const viewBox = () => { const b = map.getBounds(); return [b.getWest(), b.getSouth(), b.getEast(), b.getNorth()]; };
+  const boxesOverlap = (a, b) => a[0] <= b[2] && a[2] >= b[0] && a[1] <= b[3] && a[3] >= b[1];
+  function loadRegion(r) {
+    if (r.state) return;
+    r.state = 'loading';
+    toast('Loading ' + r.name + ' public land...');
     const s = document.createElement('script');
-    s.src = 'data/public_land.js';
-    s.onload = () => {
-      const gj = window.PUBLIC_LAND;
-      map.getSource('land').setData(gj);
-      landIndex = gj.features.map(f => {
+    s.src = r.file + (r.start || !VER ? '' : '?' + VER);
+    s.onload = () => onLoad(() => {
+      const gj = window[r.global];
+      r.state = 'done';
+      gj.features.forEach(f => landFeatures.push(f));
+      map.getSource('land').setData({ type: 'FeatureCollection', features: landFeatures });
+      gj.features.forEach(f => {
         let minX = 180, minY = 90, maxX = -180, maxY = -90;
         f.geometry.coordinates.forEach(poly => poly[0].forEach(([x, y]) => {
           if (x < minX) minX = x; if (x > maxX) maxX = x; if (y < minY) minY = y; if (y > maxY) maxY = y;
         }));
-        return { f, bb: [minX, minY, maxX, maxY] };
+        landIndex.push({ f, bb: [minX, minY, maxX, maxY] });
       });
-      landLoaded = true;
+      delete window[r.global]; // the map and landIndex hold it now
+      landLoaded = REGIONS.every(x => x.state !== 'loading');
       $('toast').hidden = true;
-    };
-    s.onerror = () => toast('Public land data did not load (data/public_land.js).');
+    });
+    s.onerror = () => { r.state = null; s.remove(); toast(r.name + ' public land did not load. Check your connection.'); };
     document.body.appendChild(s);
   }
+  function loadLand() {
+    const view = viewBox();
+    REGIONS.forEach(r => { if (r.start || boxesOverlap(r.bbox, view)) loadRegion(r); });
+  }
+  // Which states the map is showing (wind stations are asked for these).
+  const regionsInView = () => { const v = viewBox(); return REGIONS.filter(r => boxesOverlap(r.bbox, v)); };
   function inRing(x, y, ring) {
     let inside = false;
     for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
@@ -424,6 +459,8 @@
   map.on('moveend', () => {
     state.view = { center: map.getCenter().toArray().map(v => +v.toFixed(5)), zoom: +map.getZoom().toFixed(2) };
     save();
+    if (mapLoaded) loadLand(); // starts West Virginia's land the first time the map shows it
+    if (mapLoaded && windRegions && windRegions !==REGIONS.filter(r => r.start || r.state).map(r => r.id).join(',')) loadWind(false);
     if (!userPos) showNearestWind();
   });
 
@@ -441,7 +478,7 @@
     const html = parcel && !hits.length ? '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>'
       : landHtml(hits) + (parcel ? '<div class="pop">' + window.MHM.parcelHtml(parcel) + '</div>' : '');
     // Extras add their own sections, only while they're switched on (trees.js, crops.js).
-    const extras = [window.MHM.treePop, window.MHM.cropPop].map(f => f && f(e.lngLat, e.point)).filter(Boolean);
+    const extras = [window.MHM.windFlowPop, window.MHM.treePop, window.MHM.cropPop].map(f => f && f(e.lngLat, e.point)).filter(Boolean);
     if (!extras.length) { openPopup(e.lngLat, html); return; }
     const el = document.createElement('div'); el.innerHTML = html; extras.forEach(x => el.appendChild(x));
     openPopup(e.lngLat, el);
@@ -472,10 +509,10 @@
 
   // ---- Extras. Off by default; each one's file is only downloaded when it's switched on.
   // They get the same ?v= tag index.html gave this file, so a phone never mixes old and new.
-  const VER = (document.currentScript && document.currentScript.src.split('?')[1]) || '';
   [
     { chk: 'chkTrees', key: 'mhm.trees.v1', file: 'trees.js', api: 'trees', name: 'Tree types' },
     { chk: 'chkCrops', key: 'mhm.crops.v1', file: 'crops.js', api: 'crops', name: 'Crop fields' },
+    { chk: 'chkWindFlow', key: 'mhm.windflow.v1', file: 'windflow.js', api: 'windflow', name: 'Wind flow' },
   ].forEach(x => {
     const pref = () => { try { return JSON.parse(localStorage.getItem(x.key)) || {}; } catch (e) { return {}; } };
     function set(on) {

@@ -28,7 +28,9 @@
     '<div class="slider" style="padding-left:0"><input type="range" id="wfHour" min="0" max="' + (HOURS - 1) + '" value="0" aria-label="Forecast hour"><span id="wfHourVal" style="min-width:34px">+0 h</span></div>' +
     '<div class="crop-legend" aria-hidden="true">' + LEGEND.map(([t, mph]) => '<span><i style="background:' + rgb(color(mph)) + '"></i>' + t + '</span>').join('') + '<span>mph</span></div>' +
     '<p class="small" id="wfStatus"></p>' +
-    '<p class="small">Forecast from Open-Meteo (NOAA models), not measured. Streaks flow downwind. Pauses while you move the map.</p>';
+    '<p class="small">Forecast from Open-Meteo (NOAA models), not measured. Streaks flow downwind (dark on Topo and Hybrid, white on Satellite). Pauses while you move the map.</p>';
+  // Switching base maps: clear old-colored streaks and redraw in the new color.
+  document.querySelectorAll('[data-base]').forEach(b => b.addEventListener('click', () => { if (on && !moving) rebuild(); }));
   const status = t => { $('wfStatus').textContent = t || ''; };
   $('wfHour').addEventListener('input', e => { hour = +e.target.value; labelHour(); rebuild(); });
 
@@ -171,6 +173,11 @@
     for (let i = 0; i < want; i++) particles.push(spawn({}));
     start();
   }
+  // White streaks only show up on dark satellite imagery; on Topo and Hybrid they're dark.
+  function streakColor() {
+    const b = document.querySelector('[data-base][aria-pressed="true"]');
+    return b && b.dataset.base === 'sat' ? 'rgba(255,255,255,0.85)' : 'rgba(20,20,20,0.8)';
+  }
   function spawn(p) { p.x = Math.random() * field.w; p.y = Math.random() * field.h; p.age = Math.floor(Math.random() * 80); return p; }
   function vec(x, y) {
     const f = field, q = Math.max(0, Math.min(f.cols - 2, x / CELL)), r = Math.max(0, Math.min(f.rows - 2, y / CELL));
@@ -187,8 +194,8 @@
     g.fillStyle = 'rgba(0,0,0,0.9)';
     g.fillRect(0, 0, f.w, f.h);
     g.globalCompositeOperation = 'source-over';
-    g.strokeStyle = 'rgba(255,255,255,0.85)';
-    g.lineWidth = 1.2;
+    g.strokeStyle = streakColor();
+    g.lineWidth = 1.3;
     g.beginPath();
     for (const p of particles) {
       const [dx, dy] = vec(p.x, p.y);
@@ -202,7 +209,7 @@
   }
   function start() {
     if (reduced) { // no animation: draw a still set of short streaks instead
-      const g = trails.getContext('2d'); g.strokeStyle = 'rgba(255,255,255,0.8)'; g.lineWidth = 1.2; g.beginPath();
+      const g = trails.getContext('2d'); g.strokeStyle = streakColor(); g.lineWidth = 1.3; g.beginPath();
       for (let y = 12; y < field.h; y += 28) for (let x = 12; x < field.w; x += 28) { const [dx, dy] = vec(x, y); g.moveTo(x, y); g.lineTo(x + dx * 8, y + dy * 8); }
       g.stroke(); return;
     }
